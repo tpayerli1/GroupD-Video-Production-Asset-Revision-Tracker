@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Drag & Drop Media Portal</title>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-light: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 2.25rem;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .subtitle {
+      color: var(--text-light);
+      margin-bottom: 32px;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      border: 3px dashed var(--border);
+      border-radius: 16px;
+      padding: 60px 24px;
+      text-align: center;
+      background: white;
+      transition: all 0.25s ease;
+      cursor: pointer;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.05);
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .drop-zone.dragover {
+      border-style: solid;
+    }
+
+    .drop-zone h2 {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .drop-zone p {
+      color: var(--text-light);
+      margin-bottom: 16px;
+    }
+
+    .highlight {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Preview Grid */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .preview-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      position: relative;
+    }
+
+    .preview-item:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+
+    .preview-media {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      color: #cbd5e1;
+    }
+
+    video.preview-media {
+      object-fit: contain;
+      background: black;
+    }
+
+    .no-preview {
+      font-size: 4rem;
+      opacity: 0.4;
+    }
+
+    .preview-info {
+      padding: 12px 16px;
+    }
+
+    .file-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .file-size {
+      font-size: 0.875rem;
+      color: var(--text-light);
+    }
+
+    .remove-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .preview-item:hover .remove-btn {
+      opacity: 1;
+    }
+
+    .remove-btn:hover {
+      background: rgba(239, 68, 68, 0.9);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Media & File Drop Portal</h1>
+  <p class="subtitle">Drag & drop photos, videos, files or folders — previews appear below</p>
+
+  <div class="drop-zone" id="dropZone">
+    <h2>Drop files or folders here</h2>
+    <p>or <span class="highlight">click to browse</span></p>
+    <input type="file" id="fileInput" multiple hidden />
+  </div>
+
+  <div class="preview-grid" id="previewGrid"></div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const previewGrid = document.getElementById('previewGrid');
+
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return '—';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function createPreviewItem(file) {
+  const item = document.createElement('div');
+  item.className = 'preview-item';
+
+  const mediaContainer = document.createElement('div');
+  mediaContainer.className = 'preview-media';
+
+  let mediaElement;
+
+  if (file.type.startsWith('image/')) {
+    mediaElement = document.createElement('img');
+    mediaElement.src = URL.createObjectURL(file);
+    mediaElement.alt = file.name;
+  } else if (file.type.startsWith('video/')) {
+    mediaElement = document.createElement('video');
+    mediaElement.src = URL.createObjectURL(file);
+    mediaElement.controls = true;
+    mediaElement.muted = true;
+    mediaElement.preload = 'metadata';
+  } else {
+    mediaElement = document.createElement('div');
+    mediaElement.className = 'no-preview';
+    mediaElement.textContent = '📄';
+  }
+
+  if (mediaElement) {
+    mediaContainer.appendChild(mediaElement);
+  }
+
+  const info = document.createElement('div');
+  info.className = 'preview-info';
+
+  const name = document.createElement('div');
+  name.className = 'file-name';
+  name.textContent = file.name;
+
+  const size = document.createElement('div');
+  size.className = 'file-size';
+  size.textContent = formatFileSize(file.size);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-btn';
+  removeBtn.textContent = '×';
+  removeBtn.onclick = () => {
+    item.remove();
+    if (mediaElement?.src?.startsWith('blob:')) {
+      URL.revokeObjectURL(mediaElement.src);
+    }
+  };
+
+  info.appendChild(name);
+  info.appendChild(size);
+  item.appendChild(mediaContainer);
+  item.appendChild(info);
+  item.appendChild(removeBtn);
+
+  return item;
+}
+
+function handleFiles(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  const files = Array.from(fileList);
+  for (const file of files) {
+    if (file instanceof File) {
+      const preview = createPreviewItem(file);
+      previewGrid.appendChild(preview);
+    }
+  }
+}
+
+// ─── Drag & Drop ───────────────────────────────────────
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+
+  const dt = e.dataTransfer;
+
+  // Prefer .files when available (flat files / some browsers)
+  if (dt.files?.length > 0) {
+    handleFiles(dt.files);
+    return;
+  }
+
+  // Folder / entry mode (Chrome/Edge)
+  const items = dt.items;
+  if (items?.length > 0) {
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry?.() || item.getAsEntry?.();
+      if (!entry) continue;
+
+      if (entry.isFile) {
+        entry.file(file => handleFiles([file]));
+      } else if (entry.isDirectory) {
+        readDirectory(entry);
+      }
+    }
+  }
+});
+
+// Fixed recursive directory reader
+function readDirectory(dirEntry) {
+  const reader = dirEntry.createReader();
+
+  function readNextBatch() {
+    reader.readEntries((entries) => {
+      if (entries.length === 0) {
+        return; // done with this directory
+      }
+
+      for (const entry of entries) {
+        if (entry.isFile) {
+          entry.file((file) => {
+            handleFiles([file]);
+          });
+        } else if (entry.isDirectory) {
+          readDirectory(entry); // recurse
+        }
+      }
+
+      readNextBatch(); // get next batch
+    }, (err) => {
+      console.error("Error reading directory:", err);
+    });
+  }
+
+  readNextBatch();
+}
+
+// ─── Click to browse ───────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', () => {
+  handleFiles(fileInput.files);
+  fileInput.value = ''; // reset
+});
+
+</script>
+</body>
+</html>
