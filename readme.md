@@ -1,6 +1,13 @@
 
 ![](media/logo.png)
 
+
+# Desktop App
+![](media/app_screenshot.png)
+
+# Web Dashboard
+![](media/web_dash.png)
+
 # 🚀 Getting Started
 
 This project uses **Poetry** for dependency management and virtual environments, and **Django** as the web framework.
