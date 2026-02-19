@@ -1,0 +1,28 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="15">
+            <item index="0" class="java.lang.String" itemvalue="dj-database-url" />
+            <item index="1" class="java.lang.String" itemvalue="flaskwebgui" />
+            <item index="2" class="java.lang.String" itemvalue="django-markupfield" />
+            <item index="3" class="java.lang.String" itemvalue="grpcio-status" />
+            <item index="4" class="java.lang.String" itemvalue="drf-spectacular-sidecar" />
+            <item index="5" class="java.lang.String" itemvalue="grpcio" />
+            <item index="6" class="java.lang.String" itemvalue="pyrect" />
+            <item index="7" class="java.lang.String" itemvalue="pyperclip" />
+            <item index="8" class="java.lang.String" itemvalue="pytweening" />
+            <item index="9" class="java.lang.String" itemvalue="django-heroku" />
+            <item index="10" class="java.lang.String" itemvalue="pyscreeze" />
+            <item index="11" class="java.lang.String" itemvalue="pymsgbox" />
+            <item index="12" class="java.lang.String" itemvalue="pyautogui" />
+            <item index="13" class="java.lang.String" itemvalue="mouseinfo" />
+            <item index="14" class="java.lang.String" itemvalue="pygetwindow" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
