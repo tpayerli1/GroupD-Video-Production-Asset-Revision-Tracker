@@ -2,6 +2,10 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("", views.dashboard_home, name="dashboard_home"),
+    path("dashboard/", views.dashboard_home, name="dashboard_home"),
+    path("dashboard/batch/<int:batch_id>/", views.dashboard_batch_detail, name="dashboard_batch_detail"),
+    path("dashboard/batch/<int:batch_id>/assign-project/", views.dashboard_batch_assign_project, name="dashboard_batch_assign_project"),
 ]
 
 # API Stuff

@@ -10,5 +10,6 @@ admin.site.register(Tag)
 admin.site.register(Media)
 admin.site.register(MediaTag)
 admin.site.register(MediaMetadata)
+admin.site.register(Batch)
 
 

@@ -79,6 +79,10 @@ class Tag(models.Model):
 
 
 class Batch(models.Model):
+
+    class Meta:
+        verbose_name_plural = "Batches"
+
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
@@ -87,6 +91,10 @@ class Batch(models.Model):
 
 
 class Media(models.Model):
+
+    class Meta:
+        verbose_name_plural = "Media Files"
+
     batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
@@ -115,6 +123,10 @@ class MediaTag(models.Model):
 
 
 class MediaMetadata(models.Model):
+
+    class Meta:
+        verbose_name_plural = "Media Metadata"
+
     # ERD looks 1:1-ish (metadata belongs to media)
     media = models.OneToOneField(Media, on_delete=models.CASCADE, related_name="metadata")
 

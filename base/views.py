@@ -4,8 +4,53 @@ from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 
-from .models import Batch, Media, Tag, MediaTag
+from django.shortcuts import render, get_object_or_404, redirect
+from django.db.models import Count
 
+from .models import *
+
+
+def dashboard_home(request):
+    batches = (
+        Batch.objects
+        .annotate(media_count=Count("media"))
+        .order_by("-created_at")
+    )
+    return render(request, "base/dashboard_home.html", {"batches": batches})
+
+def dashboard_batch_detail(request, batch_id):
+    batch = get_object_or_404(Batch.objects.annotate(media_count=Count("media")), id=batch_id)
+    media = batch.media.order_by("-created_at")
+    projects = Project.objects.order_by("name")
+    return render(
+        request,
+        "base/dashboard_batch_detail.html",
+        {"batch": batch, "media": media, "projects": projects},
+    )
+
+def dashboard_batch_assign_project(request, batch_id):
+    if request.method != "POST":
+        return redirect("dashboard_batch_detail", batch_id=batch_id)
+
+    batch = get_object_or_404(Batch, id=batch_id)
+
+    project_id = request.POST.get("project_id") or ""
+    new_project_name = (request.POST.get("new_project_name") or "").strip()
+
+    project = None
+    if new_project_name:
+        project = Project.objects.create(name=new_project_name)
+    elif project_id.isdigit():
+        project = Project.objects.filter(id=int(project_id)).first()
+
+    if project:
+        Media.objects.filter(batch=batch).update(project=project)
+
+    return redirect("dashboard_batch_detail", batch_id=batch_id)
+
+
+
+# API STUFF
 
 def _json(request):
     try:
