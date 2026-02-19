@@ -8,14 +8,6 @@ __pycache__/
 *.pyd
 *.pyo
 
-# Python build / packaging
-build/
-dist/
-downloads/
-eggs/
-.eggs/
-*.egg-info/
-*.egg
 
 # =========================
 # Virtual Environments
@@ -36,7 +28,7 @@ poetry.lock
 */migrations/__pycache__/
 
 # =========================
-# Environment Variables
+# Environment Variabless
 # =========================
 .env
 .env.*
@@ -66,11 +58,17 @@ htmlcov/
 .mypy_cache/
 
 # =========================
-# Node (if frontend later)
-# =========================
-node_modules/
-
-# =========================
-# Logs
+# Logs and stuff
 # =========================
 *.log
+
+
+# =========================
+# Node / Electron Stuff
+# =========================
+electron_app/node_modules/
+electron_app/dist/
+electron_app/out/
+electron_app/build/
+electron_app/.env
+electron_app/npm-debug.log*

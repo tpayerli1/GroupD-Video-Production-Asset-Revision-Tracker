@@ -1,0 +1,15 @@
+{
+  "name": "visa",
+  "productName": "VISA",
+  "version": "1.0.0",
+  "description": "VISA file ingestion desktop app",
+  "main": "main.js",
+  "author": "MSSU Group D",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}

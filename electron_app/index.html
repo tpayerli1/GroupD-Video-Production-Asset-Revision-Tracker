@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VISA</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            boxShadow: {
+              soft: "0 20px 80px rgba(0,0,0,.55)",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="min-h-screen bg-[#0b0d10] text-zinc-100 antialiased">
+    <div class="pointer-events-none fixed inset-0">
+      <div
+        class="absolute inset-0 opacity-35"
+        style="
+          background-image: radial-gradient(
+            circle at 1px 1px,
+            rgba(255, 255, 255, 0.08) 1px,
+            transparent 0
+          );
+          background-size: 18px 18px;
+        "
+      ></div>
+      <div
+        class="absolute -top-48 left-1/2 h-[520px] w-[760px] -translate-x-1/2 rounded-full blur-3xl opacity-25"
+        style="background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 60%)"
+      ></div>
+      <div
+        class="absolute -bottom-48 left-1/2 h-[520px] w-[760px] -translate-x-1/2 rounded-full blur-3xl opacity-20"
+        style="background: radial-gradient(circle, rgba(99, 102, 241, 0.35), transparent 60%)"
+      ></div>
+    </div>
+
+    <main class="relative flex min-h-screen items-center justify-center p-8">
+      <div class="flex w-[min(50vw,720px)] min-w-[320px] flex-col gap-4">
+        <section class="rounded-2xl bg-zinc-950/30 ring-1 ring-zinc-800/60 backdrop-blur">
+          <div class="flex items-center gap-3 p-4">
+            <div class="text-sm font-medium text-zinc-200">Add tags</div>
+            <div class="h-px flex-1 bg-zinc-800/70"></div>
+          </div>
+
+          <div class="flex flex-col gap-3 px-4 pb-4">
+            <div class="flex items-center gap-3">
+              <input
+                id="tagsInput"
+                type="text"
+                placeholder="example: Lake, jan-2026, b-roll"
+                class="w-full rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600/90"
+              />
+
+              <button
+                id="addTagsBtn"
+                type="button"
+                class="whitespace-nowrap rounded-xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-white active:scale-[0.99]"
+              >
+                Add tags to media →
+              </button>
+            </div>
+
+            <div class="text-xs text-zinc-500">
+              Comma separated. Applies to the most recently dropped batch.
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="dropZone"
+          class="
+            group
+            flex
+            h-[min(50vh,420px)]
+            min-h-[220px]
+            flex-col
+            items-center
+            justify-center
+            rounded-2xl
+            border-2
+            border-dashed
+            border-zinc-700/80
+            bg-zinc-950/40
+            shadow-soft
+            backdrop-blur
+            transition
+            duration-150
+            ease-out
+            select-none
+          "
+        >
+          <div
+            class="
+              mb-5
+              grid
+              h-14
+              w-14
+              place-items-center
+              rounded-2xl
+              bg-zinc-900/70
+              ring-1
+              ring-zinc-700/60
+              transition
+              group-[.is-over]:bg-zinc-800/80
+              group-[.is-over]:ring-zinc-400/60
+            "
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" class="opacity-85">
+              <path
+                fill="currentColor"
+                d="M12 3a1 1 0 0 1 1 1v9.586l2.293-2.293a1 1 0 1 1 1.414 1.414l-4.004 4.004a1.2 1.2 0 0 1-1.406 0L7.293 12.707a1 1 0 1 1 1.414-1.414L11 13.586V4a1 1 0 0 1 1-1Zm-7 16a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1Z"
+              />
+            </svg>
+          </div>
+
+          <h1 class="text-2xl font-semibold tracking-tight text-zinc-100">Drop files here</h1>
+
+          <div class="mt-6 flex items-center gap-2 text-xs text-zinc-500">
+            <span class="inline-flex h-2 w-2 rounded-full bg-emerald-500/70"></span>
+            <span id="statusText">Idle</span>
+          </div>
+        </section>
+
+        <div class="flex justify-center pt-2">
+          <button
+            id="resetBatchBtn"
+            type="button"
+            class="
+              rounded-xl
+              border
+              border-zinc-800
+              bg-zinc-950/40
+              px-5
+              py-2.5
+              text-sm
+              font-medium
+              text-zinc-300
+              backdrop-blur
+              transition
+              hover:border-zinc-600
+              hover:text-white
+              active:scale-[0.98]
+            "
+          >
+            Reset batch
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const API_BASE = "http://127.0.0.1:8000";
+
+      let batchId = null;
+      let lastPaths = [];
+
+      const dz = document.getElementById("dropZone");
+      const statusText = document.getElementById("statusText");
+      const tagsInput = document.getElementById("tagsInput");
+      const addTagsBtn = document.getElementById("addTagsBtn");
+      const resetBatchBtn = document.getElementById("resetBatchBtn");
+
+      async function ensureBatch(payload = {}) {
+        const res = await window.uploader.post(`${API_BASE}/api/batches/ensure/`, payload);
+        batchId = res.batch_id;
+        return batchId;
+      }
+
+      function getTagsValue() {
+        return (tagsInput?.value || "").trim();
+      }
+
+      async function sendMedia(paths, tags = null) {
+        if (!batchId) await ensureBatch();
+        const payload = { batch_id: batchId, paths: paths || [] };
+        if (tags) payload.tags = tags;
+        return window.uploader.post(`${API_BASE}/api/media_files/`, payload);
+      }
+
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
+        window.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      });
+
+      dz.addEventListener("dragenter", () => dz.classList.add("is-over"));
+      dz.addEventListener("dragover", () => dz.classList.add("is-over"));
+      dz.addEventListener("dragleave", () => dz.classList.remove("is-over"));
+
+      dz.addEventListener("drop", async (e) => {
+        dz.classList.remove("is-over");
+
+        const files = [...(e.dataTransfer?.files || [])];
+        const paths = files.map((f) => f.path).filter(Boolean);
+
+        lastPaths = paths;
+
+        try {
+          statusText.textContent = `Sending ${paths.length}…`;
+          const res = await sendMedia(paths);
+          statusText.textContent = `Batch ${batchId} • +${res.created} new • ${res.updated} existing`;
+        } catch (err) {
+          statusText.textContent = `Error: ${err?.message || err}`;
+        }
+      });
+
+      addTagsBtn?.addEventListener("click", async () => {
+        const tags = getTagsValue();
+        if (!tags) {
+          statusText.textContent = "Enter tags first.";
+          return;
+        }
+        if (!lastPaths.length) {
+          statusText.textContent = "Drop files first.";
+          return;
+        }
+
+        try {
+          statusText.textContent = "Adding tags…";
+          const res = await sendMedia(lastPaths, tags);
+          statusText.textContent = `Tagged ${lastPaths.length} • Links +${res.tag_links_created ?? 0}`;
+          tagsInput.value = "";
+        } catch (err) {
+          statusText.textContent = `Error: ${err?.message || err}`;
+        }
+      });
+
+      resetBatchBtn?.addEventListener("click", async () => {
+        try {
+          statusText.textContent = "Resetting…";
+          const old = batchId;
+          await ensureBatch({ reset: true, batch_id: old });
+          lastPaths = [];
+          statusText.textContent = `New batch ${batchId}`;
+        } catch (err) {
+          statusText.textContent = `Error: ${err?.message || err}`;
+        }
+      });
+
+      (async () => {
+        try {
+          await ensureBatch();
+          statusText.textContent = `Ready • Batch ${batchId}`;
+        } catch (err) {
+          statusText.textContent = `Error: ${err?.message || err}`;
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -57,35 +57,50 @@ class Customer(models.Model):
         return f"{label} ({self.project})"
 
 
+
 class Tag(models.Model):
-    # ERD ties tags to user
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="tags",
+        null=True,
+        blank=True,
     )
     name = models.CharField(max_length=90)
 
     class Meta:
-        unique_together = ("user", "name")
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="uniq_tag_user_name"),
+        ]
 
     def __str__(self):
         return self.name
 
 
+
+class Batch(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Batch {self.pk}"
+
+
 class Media(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="media")
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
 
     file_name = models.CharField(max_length=90)
-    file_path = models.CharField(max_length=256)
+    file_path = models.CharField(max_length=256, unique=True)
 
-    # ERD has media_tags join table
     tags = models.ManyToManyField(Tag, through="MediaTag", related_name="media", blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.file_name} ({self.project})"
+        return f"{self.file_name}"
+
 
 
 class MediaTag(models.Model):

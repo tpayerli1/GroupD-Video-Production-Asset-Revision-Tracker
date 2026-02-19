@@ -1,3 +1,6 @@
+
+![](media/logo.png)
+
 # 🚀 Getting Started
 
 This project uses **Poetry** for dependency management and virtual environments, and **Django** as the web framework.
@@ -154,4 +157,85 @@ poetry add -D package_name
 
 ---
 
+---
+
+# 🖥 Electron Desktop App (VISA Uploader)
+
+This project includes a local **Electron desktop application** used for ingesting file paths into the Django API.
+
+The Electron app is intentionally simple:
+
+- Drag and drop files
+- Create a batch
+- Send file paths to Django
+- Optionally add tags to the batch
+- Reset batch session
+
+No files are uploaded — only local file paths.
+
+## 📁 Location
+
+```bash
+electron_app/
+```
+
+---
+
+# ⚡ Run Electron App (Development)
+
+Open a new terminal and run:
+
+```bash
+cd electron_app
+npm install
+npm start
+```
+
+This launches the VISA uploader window.
+
+---
+
+# 🔗 Electron ↔ Django Requirements
+
+The Django server **must be running** before starting the Electron app.
+
+```bash
+python manage.py runserver
+```
+
+Default API endpoint:
+
+```plaintext
+http://127.0.0.1:8000
+```
+
+Electron communicates with Django via:
+
+```plaintext
+POST /api/batches/ensure/   → create/reset batch
+POST /api/media_files/      → send file paths + tags
+```
+
+---
+
+# 📦 Electron Dependencies
+
+Electron dependencies are managed separately from Python dependencies.
+
+Install or update:
+
+```bash
+cd electron_app
+npm install
+```
+
+Electron packages are **not managed by Poetry**.
+
+---
+
+# 🧠 Development Notes
+
+- Electron stores the current batch in memory
+- Batch resets when the app reloads or reset button is pressed
+- Django handles all persistence
 
