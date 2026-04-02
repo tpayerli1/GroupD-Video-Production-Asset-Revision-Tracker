@@ -8,6 +8,10 @@
 # Web Dashboard
 ![](media/web_dash.png)
 
+
+# todo notes
+- [ ] Make sure users get tied to clients and tags they create 
+
 # 🚀 Getting Started
 
 This project uses **Poetry** for dependency management and virtual environments, and **Django** as the web framework.

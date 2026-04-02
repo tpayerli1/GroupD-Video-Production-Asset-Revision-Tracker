@@ -9,13 +9,27 @@ from django.db.models import Count
 
 from .models import *
 
+#import prefetch_related, annotate, Count
+from django.db.models import Prefetch
+
 
 def dashboard_home(request):
+    empty_batch_ids = (
+        Batch.objects
+        .annotate(media_count=Count("media"))
+        .filter(media_count=0)
+        .values_list("id", flat=True)
+    )
+    Batch.objects.filter(id__in=empty_batch_ids).delete()
+
+
+
     batches = (
         Batch.objects
         .annotate(media_count=Count("media"))
         .order_by("-created_at")
     )
+
     return render(request, "base/dashboard_home.html", {"batches": batches})
 
 def dashboard_batch_detail(request, batch_id):

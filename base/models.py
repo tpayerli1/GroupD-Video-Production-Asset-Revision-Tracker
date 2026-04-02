@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.db import models
+# import user
+from django.contrib.auth import get_user_model
 
 
 class Project(models.Model):
@@ -37,6 +39,9 @@ class ProjectUser(models.Model):
 
 class Customer(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="customers")
+
+    # optional link to users table if you want to associate a customer with a user account
+    # linked_user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
 
     company_name = models.CharField(max_length=45, blank=True)
     first_name = models.CharField(max_length=45)
