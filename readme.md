@@ -8,6 +8,81 @@
 # Web Dashboard
 ![](media/web_dash.png)
 
+## Using AI to help with models, fixtures, and basic tests
+
+When working on this project, you can paste a model or a small group of related models into an AI tool and ask it to help generate sample fixtures or starter tests.
+
+A good workflow is:
+
+1. Copy only the relevant model code, not the whole project.
+2. Include any important notes about relationships or business rules.
+3. Ask for either:
+   - Django fixture examples
+   - model test cases
+   - view/API test cases
+   - factory or seed data ideas
+
+Keep your request focused. Smaller chunks usually get better results.
+
+### Example prompt for fixtures
+
+Here is a Django model from my project. Generate 3 realistic fixture records for it in JSON fixture format for Django loaddata. Use sensible fake values and respect foreign keys. If another model is required, include minimal related fixture rows too.
+
+[paste model here]
+
+### Example prompt for tests
+
+Here is a Django model from my project. Generate basic Django tests for it using TestCase. Cover:
+- object creation
+- string representation
+- required vs optional fields
+- one relationship test if applicable
+
+Only return the test code.
+
+[paste model here]
+
+### Example prompt for multiple related models
+
+Here are related Django models from my project. Generate:
+1. a small set of Django JSON fixtures
+2. a basic tests.py file using Django TestCase
+3. short notes on anything that looks risky or worth validating
+
+[paste models here]
+
+### What to include with your prompt
+
+AI works better if you also include:
+- whether the app uses Django's default `User` model or a custom one
+- whether fields are nullable or unique for a business reason
+- any expected naming conventions
+- whether you want fixtures, unit tests, integration tests, or all three
+
+### What to check before committing AI output
+
+Do not blindly trust generated code. Always review for:
+
+- wrong field names
+- wrong related names
+- incorrect assumptions about null/blank
+- fake foreign keys that do not match your fixture records
+- tests that import models from the wrong app
+- use of libraries we are not using
+
+### Recommended student workflow
+
+1. Make or update the model by hand.
+2. Run `makemigrations` and `migrate`.
+3. Paste the model into AI and ask for starter fixtures or tests.
+4. Clean up the output so it matches the actual app.
+5. Run the tests locally.
+6. Commit only reviewed code.
+
+### Example README-safe note
+
+AI is allowed as a helper for boilerplate, fixtures, and test scaffolding, but students are still responsible for understanding and validating all generated code before submitting it.
+
 
 # todo notes
 - [ ] Make sure users get tied to clients and tags they create 
