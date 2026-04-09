@@ -19,13 +19,26 @@ def dashboard_home(request):
     return render(request, "base/dashboard_home.html", {"batches": batches})
 
 def dashboard_batch_detail(request, batch_id):
-    batch = get_object_or_404(Batch.objects.annotate(media_count=Count("media")), id=batch_id)
-    media = batch.media.order_by("-created_at")
-    projects = Project.objects.order_by("name")
+    # Annotate batch with media count
+    batch = get_object_or_404(
+        Batch.objects.annotate(media_count=Count("media")),
+        id=batch_id
+    )
+
+    # Fetch media for this batch, order by creation date
+    media = batch.media.order_by("-created_at")  # Ensure Media model has created_at
+
+    # Fetch all projects, ordered by Project_Name
+    projects = Project.objects.order_by("Project_Name")
+
     return render(
         request,
         "base/dashboard_batch_detail.html",
-        {"batch": batch, "media": media, "projects": projects},
+        {
+            "batch": batch,
+            "media": media,
+            "projects": projects,
+        },
     )
 
 def dashboard_batch_assign_project(request, batch_id):
@@ -110,7 +123,7 @@ def api_batch_detail(request, batch_id: int):
     if not b:
         return JsonResponse({"detail": "Not found"}, status=404)
 
-    media = b.media.order_by("-created_at").values("id", "file_name", "file_path", "created_at")
+    media = b.media.order_by("-created_at").values("id", "File_Name", "File_Path", "created_at")
 
     return JsonResponse(
         {
@@ -138,7 +151,6 @@ def api_media_files(request):
         print("❌ Missing batch_id")
         return JsonResponse({"detail": "batch_id required"}, status=400)
 
-    print("🔎 Looking up batch:", batch_id)
     batch = Batch.objects.filter(id=batch_id).first()
     if not batch:
         print("❌ Batch not found:", batch_id)
@@ -159,8 +171,13 @@ def api_media_files(request):
     tags = []
     if tag_names:
         print("🏷 Creating/fetching tags...")
+        # Use a default user for tag creation
+        default_user = User.objects.first()
+        if not default_user:
+            return JsonResponse({"detail": "No user exists to assign tags"}, status=500)
+
         for name in tag_names:
-            t, created = Tag.objects.get_or_create(user=None, name=name)
+            t, created = Tag.objects.get_or_create(User_ID=default_user, Tag_Name=name)
             if created:
                 print("  + Created tag:", name)
             tags.append(t)
@@ -176,14 +193,14 @@ def api_media_files(request):
             continue
 
         p = str(p)[:256]
-        file_name = os.path.basename(p.rstrip("\\/"))[:90]
+        File_Name = os.path.basename(p.rstrip("\\/"))[:90]
 
         print("→ Processing:", p)
 
         obj, was_created = Media.objects.get_or_create(
-            file_path=p,
+            File_Path=p,
             defaults={
-                "file_name": file_name,
+                "File_Name": File_Name,
                 "batch": batch,
             },
         )
@@ -192,32 +209,24 @@ def api_media_files(request):
             created_count += 1
             print("   + Created media record")
         else:
-            print("   • Media exists — checking updates")
-
             changed = False
-
             if obj.batch_id != batch.id:
-                print("     → Updating batch")
                 obj.batch = batch
                 changed = True
-
-            if obj.file_name != file_name:
-                print("     → Updating filename")
-                obj.file_name = file_name
+            if obj.File_Name != File_Name:
+                obj.File_Name = File_Name
                 changed = True
-
             if changed:
-                obj.save(update_fields=["batch", "file_name"])
+                obj.save(update_fields=["batch", "File_Name"])
                 print("     ✓ Saved updates")
-
             updated_count += 1
 
         if tags:
             for t in tags:
-                _, mt_created = MediaTag.objects.get_or_create(media=obj, tag=t)
+                _, mt_created = MediaTag.objects.get_or_create(Media_ID=obj, Tag_ID=t)
                 if mt_created:
                     tag_links_created += 1
-                    print("     + Linked tag:", t.name)
+                    print("     + Linked tag:", t.Tag_Name)
 
     print("✅ Done")
     print("   Created:", created_count)
