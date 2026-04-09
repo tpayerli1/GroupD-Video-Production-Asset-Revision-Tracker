@@ -1,7 +1,5 @@
 from django.conf import settings
 from django.db import models
-# import user
-from django.contrib.auth import get_user_model
 
 
 class Project(models.Model):
@@ -10,7 +8,6 @@ class Project(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
 
-    # user <-> project (join table in ERD)
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through="ProjectUser",
@@ -26,8 +23,7 @@ class ProjectUser(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
 
-    # optional “gist” fields you’ll probably want
-    role = models.CharField(max_length=50, blank=True)
+    role = models.CharField(max_length=90, blank=True)
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -38,29 +34,29 @@ class ProjectUser(models.Model):
 
 
 class Customer(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="customers")
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="customers",
+    )
 
-    # optional link to users table if you want to associate a customer with a user account
-    # linked_user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    company_name = models.CharField(max_length=90, blank=True)
+    first_name = models.CharField(max_length=90)
+    last_name = models.CharField(max_length=90)
 
-    company_name = models.CharField(max_length=45, blank=True)
-    first_name = models.CharField(max_length=45)
-    last_name = models.CharField(max_length=45)
-
-    phone = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
 
-    street_num = models.CharField(max_length=10, blank=True)
-    street_name = models.CharField(max_length=45, blank=True)
-    city = models.CharField(max_length=45, blank=True)
-    state = models.CharField(max_length=2, blank=True)
-    zip_code = models.CharField(max_length=10, blank=True)
-    country = models.CharField(max_length=45, blank=True)
+    street_num = models.CharField(max_length=20, blank=True)
+    street_name = models.CharField(max_length=120, blank=True)
+    city = models.CharField(max_length=90, blank=True)
+    state = models.CharField(max_length=10, blank=True)
+    zip_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=90, blank=True)
 
     def __str__(self):
         label = self.company_name or f"{self.first_name} {self.last_name}"
         return f"{label} ({self.project})"
-
 
 
 class Tag(models.Model):
@@ -82,9 +78,7 @@ class Tag(models.Model):
         return self.name
 
 
-
 class Batch(models.Model):
-
     class Meta:
         verbose_name_plural = "Batches"
 
@@ -96,24 +90,38 @@ class Batch(models.Model):
 
 
 class Media(models.Model):
-
     class Meta:
         verbose_name_plural = "Media Files"
 
-    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
+    batch = models.ForeignKey(
+        Batch,
+        on_delete=models.CASCADE,
+        related_name="media",
+        null=True,
+        blank=True,
+    )
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="media",
+        null=True,
+        blank=True,
+    )
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="media", null=True, blank=True)
+    file_name = models.CharField(max_length=255)
+    file_path = models.CharField(max_length=512, unique=True)
 
-    file_name = models.CharField(max_length=90)
-    file_path = models.CharField(max_length=256, unique=True)
-
-    tags = models.ManyToManyField(Tag, through="MediaTag", related_name="media", blank=True)
+    tags = models.ManyToManyField(
+        Tag,
+        through="MediaTag",
+        related_name="media",
+        blank=True,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.file_name}"
-
+        return self.file_name
 
 
 class MediaTag(models.Model):
@@ -128,18 +136,84 @@ class MediaTag(models.Model):
 
 
 class MediaMetadata(models.Model):
-
     class Meta:
         verbose_name_plural = "Media Metadata"
 
-    # ERD looks 1:1-ish (metadata belongs to media)
-    media = models.OneToOneField(Media, on_delete=models.CASCADE, related_name="metadata")
+    media = models.OneToOneField(
+        Media,
+        on_delete=models.CASCADE,
+        related_name="metadata",
+    )
 
-    file_type = models.CharField(max_length=45, blank=True)
-    resolution = models.CharField(max_length=45, blank=True)
-    file_size = models.FloatField(null=True, blank=True)
-    import_date = models.DateField(null=True, blank=True)
+    file_type = models.CharField(max_length=90, blank=True)
+
+    file_size = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="File size in bytes",
+    )
+
+    imported_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this metadata record was imported or created",
+    )
+
     has_color_grade = models.BooleanField(default=False)
+
+    hdr = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="True/False when known, null when unknown",
+    )
+
+    frame_rate = models.DecimalField(
+        max_digits=8,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Frames per second, e.g. 23.976",
+    )
+
+    codec = models.CharField(max_length=90, blank=True)
+
+    duration = models.DurationField(
+        null=True,
+        blank=True,
+        help_text="Length of media",
+    )
+
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+
+    aspect_ratio = models.CharField(
+        max_length=90,
+        null=True,
+        blank=True,
+        help_text="Optional source-reported aspect ratio",
+    )
+
+    color_space = models.CharField(max_length=90, blank=True)
+
+    bit_rate = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Bits per second",
+    )
 
     def __str__(self):
         return f"Metadata for {self.media}"
+
+    @property
+    def resolution(self):
+        if self.width and self.height:
+            return f"{self.width}x{self.height}"
+        return ""
+
+    @property
+    def derived_aspect_ratio(self):
+        if self.width and self.height:
+            from math import gcd
+            divisor = gcd(self.width, self.height)
+            return f"{self.width // divisor}:{self.height // divisor}"
+        return ""
