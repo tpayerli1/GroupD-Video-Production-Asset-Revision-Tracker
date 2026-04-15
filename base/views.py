@@ -371,6 +371,76 @@ def dashboard_projects(request):
     )
 
 
+def dashboard_project_detail(request, project_id):
+    project = get_object_or_404(
+        Project.objects.annotate(
+            media_total=Count("media", distinct=True),
+            client_total=Count("customers", distinct=True),
+        ),
+        id=project_id,
+    )
+
+    if request.method == "POST":
+        first_name = (request.POST.get("first_name") or "").strip()
+        last_name = (request.POST.get("last_name") or "").strip()
+
+        if not first_name or not last_name:
+            messages.error(request, "Client first and last name are required.")
+        else:
+            Customer.objects.create(
+                project=project,
+                company_name=(request.POST.get("company_name") or "").strip(),
+                first_name=first_name,
+                last_name=last_name,
+                email=(request.POST.get("email") or "").strip(),
+                phone=(request.POST.get("phone") or "").strip(),
+            )
+            messages.success(request, "Client added to project.")
+            return redirect("dashboard_project_detail", project_id=project.id)
+
+    q = (request.GET.get("q") or "").strip()
+    client_id = (request.GET.get("client_id") or "").strip()
+    tag_id = (request.GET.get("tag_id") or "").strip()
+    search_state = _search_state_from_request(request)
+
+    media = (
+        project.media.select_related("metadata", "batch")
+        .prefetch_related("tags")
+        .order_by("file_name")
+    )
+
+    if q:
+        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
+        if search_state["tags"]:
+            q_filter |= Q(tags__name__icontains=q)
+        if search_state["metadata"]:
+            q_filter |= (
+                Q(metadata__file_type__icontains=q)
+                | Q(metadata__codec__icontains=q)
+                | Q(metadata__color_space__icontains=q)
+                | Q(metadata__aspect_ratio__icontains=q)
+            )
+        media = media.filter(q_filter).distinct()
+
+    if client_id.isdigit():
+        media = media.filter(project__customers__id=int(client_id)).distinct()
+    if tag_id.isdigit():
+        media = media.filter(tags__id=int(tag_id)).distinct()
+
+    return render(
+        request,
+        "base/dashboard_project_detail.html",
+        {
+            "project": project,
+            "clients": project.customers.order_by("company_name", "last_name", "first_name"),
+            "media_list": media,
+            "tag_options": Tag.objects.filter(media__project=project).order_by("name").distinct(),
+            "filters": {"q": q, "client_id": client_id, "tag_id": tag_id},
+            **_base_context(search_state),
+        },
+    )
+
+
 def dashboard_tags(request):
     q = (request.GET.get("q") or "").strip()
     creator = (request.GET.get("creator") or "").strip()

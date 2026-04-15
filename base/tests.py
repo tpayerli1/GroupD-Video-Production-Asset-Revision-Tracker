@@ -336,3 +336,31 @@ class DashboardNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "lake-broll.mp4")
         self.assertContains(response, "Lake Project")
+
+    def test_project_detail_page_shows_project_media(self):
+        response = self.client.get(reverse("dashboard_project_detail", args=[self.project.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lake Project")
+        self.assertContains(response, "lake-broll.mp4")
+
+    def test_project_detail_page_can_add_client(self):
+        response = self.client.post(
+            reverse("dashboard_project_detail", args=[self.project.id]),
+            {
+                "company_name": "Second Client Co",
+                "first_name": "Jordan",
+                "last_name": "Reed",
+                "email": "jordan@example.com",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            Customer.objects.filter(
+                project=self.project,
+                company_name="Second Client Co",
+                first_name="Jordan",
+                last_name="Reed",
+            ).exists()
+        )

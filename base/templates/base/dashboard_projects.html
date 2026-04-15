@@ -98,7 +98,11 @@
             <tbody>
               {% for project in projects %}
                 <tr>
-                  <td class="fw-semibold text-light">{{ project.name }}</td>
+                  <td>
+                    <a href="{% url 'dashboard_project_detail' project.id %}" class="fw-semibold text-light text-decoration-none">
+                      {{ project.name }}
+                    </a>
+                  </td>
                   <td>{{ project.location|default:"—" }}</td>
                   <td>{{ project.client_total }}</td>
                   <td>{{ project.media_total }}</td>

@@ -1,0 +1,178 @@
+{% extends "base/base.html" %}
+
+{% block title %}Project {{ project.name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <a href="{% url 'dashboard_projects' %}" class="btn btn-sm btn-outline-visa mb-3">← Back</a>
+      <div class="section-label mb-2">Project detail</div>
+      <h1 class="h3 mb-1">{{ project.name }}</h1>
+      <div class="muted">
+        {{ project.location|default:"No location saved" }} | {{ project.client_total }} client{{ project.client_total|pluralize }} | {{ project.media_total }} media
+      </div>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="d-grid gap-2 mb-4">
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-4">
+      <div class="visa-glass-soft card-visa h-100">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Project Clients</div>
+          <div class="small muted">Add a client if this project still needs one.</div>
+        </div>
+
+        <div class="p-4">
+          <div class="d-grid gap-2 mb-4">
+            {% for client in clients %}
+              <div class="rounded-4 border border-secondary-subtle p-3">
+                <div class="fw-semibold text-light">{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
+                <div class="small muted">{{ client.first_name }} {{ client.last_name }}</div>
+                <div class="small muted">{% if client.email %}{{ client.email }}{% endif %}{% if client.email and client.phone %} | {% endif %}{% if client.phone %}{{ client.phone }}{% endif %}</div>
+              </div>
+            {% empty %}
+              <div class="rounded-4 border border-secondary-subtle p-3 muted">No clients attached yet.</div>
+            {% endfor %}
+          </div>
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Company Name</label>
+              <input name="company_name" class="form-control search-input">
+            </div>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">First Name</label>
+                <input name="first_name" class="form-control search-input">
+              </div>
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Last Name</label>
+                <input name="last_name" class="form-control search-input">
+              </div>
+            </div>
+            <div class="row g-3 mt-0">
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Email</label>
+                <input name="email" type="email" class="form-control search-input">
+              </div>
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Phone</label>
+                <input name="phone" class="form-control search-input">
+              </div>
+            </div>
+            <button class="btn btn-visa-primary w-100 mt-3">Add Client To Project</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-lg-5">
+              <label class="form-label muted small text-uppercase">Search Project Media</label>
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="File, path, codec, tag...">
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+              <label class="form-label muted small text-uppercase">Client</label>
+              <select name="client_id" class="form-select search-input">
+                <option value="">All project clients</option>
+                {% for client in clients %}
+                  <option value="{{ client.id }}" {% if filters.client_id == client.id|stringformat:"s" %}selected{% endif %}>
+                    {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-6 col-lg-2">
+              <label class="form-label muted small text-uppercase">Tag</label>
+              <select name="tag_id" class="form-select search-input">
+                <option value="">All tags</option>
+                {% for tag in tag_options %}
+                  <option value="{{ tag.id }}" {% if filters.tag_id == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-lg-2 d-flex justify-content-end">
+              <button class="btn btn-outline-visa px-4 w-100">Filter</button>
+            </div>
+
+            <div class="col-12">
+              <div class="d-flex flex-wrap gap-2">
+                <label class="filter-chip">
+                  <input type="checkbox" name="tags" value="1" {% if search_state.tags %}checked{% endif %}>
+                  <span>Tags</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" name="metadata" value="1" {% if search_state.metadata %}checked{% endif %}>
+                  <span>Metadata</span>
+                </label>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-visa table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Batch</th>
+                <th>Tags</th>
+                <th>Metadata</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for media in media_list %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold text-light">{{ media.file_name }}</div>
+                    <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">{{ media.file_path }}</div>
+                  </td>
+                  <td>
+                    {% if media.batch %}
+                      <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">#{{ media.batch.id }}</span>
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for tag in media.tags.all %}
+                        <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
+                      {% empty %}
+                        <span class="muted">—</span>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td class="small muted">
+                    {% if media.metadata %}
+                      {{ media.metadata.file_type|default:"unknown" }}
+                      {% if media.metadata.resolution %}| {{ media.metadata.resolution }}{% endif %}
+                      {% if media.metadata.codec %}| {{ media.metadata.codec }}{% endif %}
+                      {% if media.metadata.duration %}| {{ media.metadata.duration }}{% endif %}
+                    {% else %}
+                      No metadata
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4" class="text-center py-5"><div class="muted">No media attached to this project yet.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
