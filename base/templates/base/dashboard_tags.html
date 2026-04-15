@@ -7,61 +7,118 @@
     <div>
       <div class="section-label mb-2">Tag library</div>
       <h1 class="h3 mb-1">Tags</h1>
-      <div class="muted">See tag usage by creator, project, and attached media count.</div>
+      <div class="muted">Create reusable tags, see where they are used, and jump straight into filtered exploration.</div>
     </div>
   </div>
 
-  <div class="visa-glass-soft card-visa">
-    <div class="content-card-header px-4 py-3">
-      <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-md-5">
-          <label class="form-label muted small text-uppercase">Search</label>
-          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Tag name or media file...">
+  {% if messages %}
+    <div class="d-grid gap-2 mb-4">
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-4">
+      <div class="visa-glass-soft card-visa h-100">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Create Tags</div>
+          <div class="small muted">Use the same tag entry flow from the rest of the dashboard so new tags are ready before you assign them.</div>
         </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label muted small text-uppercase">Creator</label>
-          <select name="creator" class="form-select search-input">
-            <option value="">Anyone</option>
-            <option value="me" {% if filters.creator == "me" %}selected{% endif %}>My tags</option>
-            <option value="loose" {% if filters.creator == "loose" %}selected{% endif %}>Loose tags</option>
-          </select>
+        <div class="p-4">
+          <form method="post">
+            {% csrf_token %}
+            {% include "base/partials/tag_input.html" with hidden_input_name="tags" hidden_input_value="" placeholder="Type tags and press space" help_text="Create one or more reusable tags. Existing tags will just be reused." %}
+            <button class="btn btn-visa-primary w-100 mt-3">Save Tags</button>
+          </form>
         </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label muted small text-uppercase">Project</label>
-          <select name="project_id" class="form-select search-input">
-            <option value="">All projects</option>
-            {% for project in projects %}
-              <option value="{{ project.id }}" {% if filters.project_id == project.id|stringformat:"s" %}selected{% endif %}>{{ project.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 d-flex justify-content-end">
-          <button class="btn btn-outline-visa px-4">Filter Tags</button>
-        </div>
-      </form>
+      </div>
     </div>
 
-    <div class="table-responsive">
-      <table class="table table-visa table-hover align-middle mb-0">
-        <thead>
-          <tr>
-            <th>Tag</th>
-            <th>Creator</th>
-            <th>Media</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for tag in tags %}
-            <tr>
-              <td class="fw-semibold text-light">{{ tag.name }}</td>
-              <td>{% if tag.user %}{{ tag.user.username }}{% else %}<span class="muted">Loose / Electron</span>{% endif %}</td>
-              <td>{{ tag.media_total }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="3" class="text-center py-5"><div class="muted">No tags yet.</div></td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-5">
+              <label class="form-label muted small text-uppercase">Search</label>
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Tag name, media file, project...">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label muted small text-uppercase">Creator</label>
+              <select name="creator" class="form-select search-input">
+                <option value="">Anyone</option>
+                <option value="me" {% if filters.creator == "me" %}selected{% endif %}>My tags</option>
+                <option value="loose" {% if filters.creator == "loose" %}selected{% endif %}>Loose tags</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label muted small text-uppercase">Project</label>
+              <select name="project_id" class="form-select search-input">
+                <option value="">All projects</option>
+                {% for project in projects %}
+                  <option value="{{ project.id }}" {% if filters.project_id == project.id|stringformat:"s" %}selected{% endif %}>{{ project.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-outline-visa px-4">Filter Tags</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-visa table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Tag</th>
+                <th>Creator</th>
+                <th>Usage</th>
+                <th>Explore</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for tag in tags %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold text-light">{{ tag.name }}</div>
+                    <div class="small muted">Used across {{ tag.project_total }} project{{ tag.project_total|pluralize }} and {{ tag.client_total }} client{{ tag.client_total|pluralize }}</div>
+                  </td>
+                  <td>{% if tag.user %}{{ tag.user.username }}{% else %}<span class="muted">Loose / Electron</span>{% endif %}</td>
+                  <td>
+                    <a href="{% url 'dashboard_media' %}?tag_id={{ tag.id }}" class="text-decoration-none text-reset">
+                      <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.media_total }} media</span>
+                    </a>
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                      <a href="{% url 'dashboard_media' %}?tag_id={{ tag.id }}" class="btn btn-sm btn-outline-visa">Open Media</a>
+                    </div>
+                    <div class="small muted">
+                      {% for project in tag.related_projects %}
+                        <a href="{% url 'dashboard_project_detail' project.id %}" class="text-decoration-none text-reset">{{ project.name }}</a>{% if not forloop.last %} • {% endif %}
+                      {% empty %}
+                        No linked projects yet.
+                      {% endfor %}
+                    </div>
+                    <div class="small muted mt-1">
+                      {% for client in tag.related_clients %}
+                        <a href="{% url 'dashboard_client_detail' client.id %}" class="text-decoration-none text-reset">
+                          {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                        </a>{% if not forloop.last %} • {% endif %}
+                      {% empty %}
+                        No linked clients yet.
+                      {% endfor %}
+                    </div>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4" class="text-center py-5"><div class="muted">No tags yet.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 {% endblock %}

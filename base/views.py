@@ -580,11 +580,32 @@ def dashboard_client_detail(request, client_id):
 
 
 def dashboard_tags(request):
+    if request.method == "POST":
+        tag_names = _parse_tags(request.POST.get("tags"))
+        if not tag_names:
+            messages.error(request, "Enter at least one tag to create.")
+        else:
+            tags, claimed_tag_count = _resolve_tags_for_user(tag_names, request.user)
+            message = f'Ready to use {len(tags)} tag{"s" if len(tags) != 1 else ""}.'
+            if claimed_tag_count:
+                message += f" Claimed {claimed_tag_count} loose tag{'s' if claimed_tag_count != 1 else ''} for your account."
+            messages.success(request, message)
+            return redirect("dashboard_tags")
+
     q = (request.GET.get("q") or "").strip()
     creator = (request.GET.get("creator") or "").strip()
     project_id = (request.GET.get("project_id") or "").strip()
 
-    tags = Tag.objects.select_related("user").annotate(media_total=Count("media", distinct=True)).order_by("name")
+    tags = (
+        Tag.objects.select_related("user")
+        .annotate(
+            media_total=Count("media", distinct=True),
+            project_total=Count("media__project", distinct=True),
+            client_total=Count("media__project__customers", distinct=True),
+        )
+        .prefetch_related("media__project__customers", "media__project")
+        .order_by("name")
+    )
     terms = _search_terms(q)
     if terms:
         tags = tags.filter(
@@ -599,6 +620,27 @@ def dashboard_tags(request):
         tags = tags.filter(user__isnull=True)
     if project_id.isdigit():
         tags = tags.filter(media__project_id=int(project_id)).distinct()
+
+    for tag in tags:
+        related_projects = []
+        seen_project_ids = set()
+        related_clients = []
+        seen_client_ids = set()
+
+        for media in tag.media.all():
+            project = media.project
+            if project and project.id not in seen_project_ids:
+                seen_project_ids.add(project.id)
+                related_projects.append(project)
+
+            if project:
+                for client in project.customers.all():
+                    if client.id not in seen_client_ids:
+                        seen_client_ids.add(client.id)
+                        related_clients.append(client)
+
+        tag.related_projects = related_projects[:3]
+        tag.related_clients = related_clients[:4]
 
     return render(
         request,

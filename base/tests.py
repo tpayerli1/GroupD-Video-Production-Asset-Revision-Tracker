@@ -447,3 +447,23 @@ class DashboardNavigationTests(TestCase):
             list(self.media.tags.order_by("name").values_list("name", flat=True)),
             ["hero", "homepage", "lake"],
         )
+
+    def test_tags_page_can_create_tags_from_shared_input(self):
+        self.client.login(username="navuser", password="secret123")
+
+        response = self.client.post(
+            reverse("dashboard_tags"),
+            {"tags": "promo, social"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Tag.objects.filter(user=self.user, name="promo").exists())
+        self.assertTrue(Tag.objects.filter(user=self.user, name="social").exists())
+
+    def test_tags_page_links_to_filtered_media(self):
+        response = self.client.get(reverse("dashboard_tags"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'{reverse("dashboard_media")}?tag_id={self.tag.id}')
+        self.assertContains(response, reverse("dashboard_project_detail", args=[self.project.id]))
+        self.assertContains(response, reverse("dashboard_client_detail", args=[self.client_obj.id]))
