@@ -9,7 +9,7 @@
       <div class="section-label mb-2">Project detail</div>
       <h1 class="h3 mb-1">{{ project.name }}</h1>
       <div class="muted">
-        {{ project.location|default:"No location saved" }} | {{ project.client_total }} client{{ project.client_total|pluralize }} | {{ project.media_total }} media
+        {{ project.location|default:"No location saved" }} | {{ project.client_total }} client{{ project.client_total|pluralize }} | {{ project.media_total }} media | {{ assigned_editors|length }} editor{{ assigned_editors|length|pluralize }}
       </div>
     </div>
   </div>
@@ -23,7 +23,67 @@
   {% endif %}
 
   <div class="row g-4">
-    <div class="col-12 col-xl-4">
+    <div class="col-12 col-xl-5">
+      <div class="visa-glass-soft card-visa mb-4">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Edit Project</div>
+          <div class="small muted">Update project details and maintain the editor list from one place.</div>
+        </div>
+        <div class="p-4">
+          <form method="post" class="mb-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_project">
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Project Name</label>
+              <input name="name" value="{{ project.name }}" class="form-control search-input">
+            </div>
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Location</label>
+              <input name="location" value="{{ project.location }}" class="form-control search-input">
+            </div>
+            <button class="btn btn-visa-primary w-100">Save Project Details</button>
+          </form>
+
+          <form method="post" id="project-editor-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_editors">
+
+            <div class="small muted text-uppercase mb-2">Project Editors</div>
+            <div class="small muted mb-3">Move users between lists, then save. Assigned editors can edit this project.</div>
+
+            <div class="row g-3 align-items-center">
+              <div class="col-12 col-md-5">
+                <label class="form-label muted small text-uppercase">Available Users</label>
+                <select multiple size="8" class="form-select search-input" data-editor-source>
+                  {% for user in available_editors %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                  {% empty %}
+                    <option disabled>No unassigned users</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-12 col-md-2">
+                <div class="d-grid gap-2">
+                  <button type="button" class="btn btn-outline-visa" data-move-editor="assign">&rarr;</button>
+                  <button type="button" class="btn btn-outline-visa" data-move-editor="remove">&larr;</button>
+                </div>
+              </div>
+              <div class="col-12 col-md-5">
+                <label class="form-label muted small text-uppercase">Assigned Editors</label>
+                <select multiple size="8" class="form-select search-input" name="editor_ids" data-editor-target>
+                  {% for user in assigned_editors %}
+                    <option value="{{ user.id }}" selected>{{ user.username }}</option>
+                  {% empty %}
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <button class="btn btn-outline-visa w-100 mt-3" data-submit-editors>Save Project Editors</button>
+          </form>
+        </div>
+      </div>
+
       <div class="visa-glass-soft card-visa h-100">
         <div class="content-card-header px-4 py-3">
           <div class="fw-semibold">Project Clients</div>
@@ -75,7 +135,7 @@
       </div>
     </div>
 
-    <div class="col-12 col-xl-8">
+    <div class="col-12 col-xl-7">
       <div class="visa-glass-soft card-visa mb-4">
         <div class="content-card-header px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
@@ -212,4 +272,37 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (() => {
+      const moveSelectedOptions = (from, to) => {
+        Array.from(from.selectedOptions).forEach((option) => {
+          option.selected = false;
+          to.appendChild(option);
+        });
+      };
+
+      const syncAssignedEditors = (target) => {
+        Array.from(target.options).forEach((option) => {
+          option.selected = true;
+        });
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const source = document.querySelector("[data-editor-source]");
+        const target = document.querySelector("[data-editor-target]");
+        const assignBtn = document.querySelector("[data-move-editor='assign']");
+        const removeBtn = document.querySelector("[data-move-editor='remove']");
+        const submitBtn = document.querySelector("[data-submit-editors]");
+
+        if (!source || !target || !assignBtn || !removeBtn || !submitBtn) return;
+
+        assignBtn.addEventListener("click", () => moveSelectedOptions(source, target));
+        removeBtn.addEventListener("click", () => moveSelectedOptions(target, source));
+        submitBtn.addEventListener("click", () => syncAssignedEditors(target));
+      });
+    })();
+  </script>
 {% endblock %}

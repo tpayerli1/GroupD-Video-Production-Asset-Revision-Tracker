@@ -9,6 +9,7 @@ from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Count, Q
@@ -342,6 +343,45 @@ def _adopt_loose_tag_for_user(tag, user):
     return tag, True, tag.media.count()
 
 
+def _assign_project_creator(project, user):
+    if user and getattr(user, "is_authenticated", False):
+        ProjectUser.objects.get_or_create(
+            project=project,
+            user=user,
+            defaults={"role": "editor"},
+        )
+
+
+def _project_editor_collections(project):
+    User = get_user_model()
+    assigned_links = list(
+        ProjectUser.objects.select_related("user")
+        .filter(project=project)
+        .order_by("user__username")
+    )
+    assigned_user_ids = {link.user_id for link in assigned_links}
+    assigned_users = [link.user for link in assigned_links]
+    available_users = list(
+        User.objects.exclude(id__in=assigned_user_ids)
+        .order_by("username")
+    )
+    return assigned_users, available_users
+
+
+def _sync_project_editors(project, editor_ids):
+    desired_ids = {int(editor_id) for editor_id in editor_ids if str(editor_id).isdigit()}
+    current_ids = set(ProjectUser.objects.filter(project=project).values_list("user_id", flat=True))
+
+    ProjectUser.objects.filter(project=project).exclude(user_id__in=desired_ids).delete()
+
+    for user_id in desired_ids - current_ids:
+        ProjectUser.objects.get_or_create(
+            project=project,
+            user_id=user_id,
+            defaults={"role": "editor"},
+        )
+
+
 def _project_media_queryset(project, q="", client_id="", tag_id="", search_state=None):
     search_state = search_state or _empty_search_state()
     terms = _search_terms(q)
@@ -472,6 +512,7 @@ def dashboard_projects(request):
                 name=project_name,
                 location=(request.POST.get("location") or "").strip(),
             )
+            _assign_project_creator(project, request.user)
             client_first_name = (request.POST.get("client_first_name") or "").strip()
             client_last_name = (request.POST.get("client_last_name") or "").strip()
             if client_first_name and client_last_name:
@@ -527,7 +568,7 @@ def dashboard_projects(request):
 
 def dashboard_project_detail(request, project_id):
     project = get_object_or_404(
-        Project.objects.annotate(
+        Project.objects.prefetch_related("projectuser_set__user").annotate(
             media_total=Count("media", distinct=True),
             client_total=Count("customers", distinct=True),
         ),
@@ -540,6 +581,22 @@ def dashboard_project_detail(request, project_id):
     search_state = _search_state_from_request(request)
     if request.method == "POST":
         action = request.POST.get("action") or "add_client"
+
+        if action == "update_project":
+            project_name = (request.POST.get("name") or "").strip()
+            if not project_name:
+                messages.error(request, "Project name is required.")
+            else:
+                project.name = project_name
+                project.location = (request.POST.get("location") or "").strip()
+                project.save(update_fields=["name", "location"])
+                messages.success(request, "Project details updated.")
+            return redirect("dashboard_project_detail", project_id=project.id)
+
+        if action == "update_editors":
+            _sync_project_editors(project, request.POST.getlist("editor_ids"))
+            messages.success(request, "Project editors updated.")
+            return redirect("dashboard_project_detail", project_id=project.id)
 
         if action == "apply_tags":
             q = (request.POST.get("q") or "").strip()
@@ -606,6 +663,7 @@ def dashboard_project_detail(request, project_id):
             return redirect("dashboard_project_detail", project_id=project.id)
 
     media = _project_media_queryset(project, q=q, client_id=client_id, tag_id=tag_id, search_state=search_state)
+    assigned_editors, available_editors = _project_editor_collections(project)
 
     return render(
         request,
@@ -613,6 +671,8 @@ def dashboard_project_detail(request, project_id):
         {
             "project": project,
             "clients": project.customers.order_by("company_name", "last_name", "first_name"),
+            "assigned_editors": assigned_editors,
+            "available_editors": available_editors,
             "media_list": media,
             "media_count": media.count(),
             "tag_options": Tag.objects.filter(media__project=project).order_by("name").distinct(),

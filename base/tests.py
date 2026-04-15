@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Batch, Customer, Media, MediaMetadata, MediaTag, Project, Tag
+from .models import Batch, Customer, Media, MediaMetadata, MediaTag, Project, ProjectUser, Tag
 
 
 class DashboardSearchTests(TestCase):
@@ -385,12 +385,15 @@ class DashboardNavigationTests(TestCase):
         self.assertContains(response, "lake-broll.mp4")
 
     def test_dashboard_projects_page_can_create_project(self):
+        self.client.login(username="navuser", password="secret123")
         response = self.client.post(
             reverse("dashboard_projects"),
             {"name": "Fresh Project", "location": "Joplin"},
         )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Project.objects.filter(name="Fresh Project", location="Joplin").exists())
+        project = Project.objects.get(name="Fresh Project", location="Joplin")
+        self.assertTrue(ProjectUser.objects.filter(project=project, user=self.user).exists())
 
     def test_dashboard_media_page_filters_by_search_query(self):
         response = self.client.get(
@@ -407,6 +410,38 @@ class DashboardNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lake Project")
         self.assertContains(response, "lake-broll.mp4")
+
+    def test_project_detail_page_can_update_project_editors(self):
+        teammate = get_user_model().objects.create_user(username="assistant", password="secret123")
+
+        response = self.client.post(
+            reverse("dashboard_project_detail", args=[self.project.id]),
+            {
+                "action": "update_editors",
+                "editor_ids": [str(self.user.id), str(teammate.id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            set(ProjectUser.objects.filter(project=self.project).values_list("user__username", flat=True)),
+            {"assistant", "navuser"},
+        )
+
+    def test_project_detail_page_can_update_project_fields(self):
+        response = self.client.post(
+            reverse("dashboard_project_detail", args=[self.project.id]),
+            {
+                "action": "update_project",
+                "name": "Updated Lake Project",
+                "location": "Tulsa",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.name, "Updated Lake Project")
+        self.assertEqual(self.project.location, "Tulsa")
 
     def test_project_detail_page_can_add_client(self):
         response = self.client.post(
