@@ -32,7 +32,7 @@
             <div class="mb-3">
               <label class="form-label muted small text-uppercase">Project</label>
               <select name="project_id" class="form-select search-input">
-                <option value="">Select project…</option>
+                <option value="">Select project...</option>
                 {% for project in projects %}
                   <option value="{{ project.id }}">{{ project.name }}</option>
                 {% endfor %}
@@ -74,7 +74,7 @@
           <form method="get" class="row g-3 align-items-end">
             <div class="col-12 col-md-7">
               <label class="form-label muted small text-uppercase">Search</label>
-              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Client, company, project...">
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Avery Lake Studio Chicago">
             </div>
             <div class="col-12 col-md-5">
               <label class="form-label muted small text-uppercase">Project</label>
@@ -104,10 +104,14 @@
               {% for client in clients %}
                 <tr>
                   <td>
-                    <div class="fw-semibold text-light">{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
+                    <a href="{% url 'dashboard_client_detail' client.id %}" class="fw-semibold text-light text-decoration-none">
+                      {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                    </a>
                     <div class="small muted">{{ client.first_name }} {{ client.last_name }}</div>
                   </td>
-                  <td>{{ client.project.name }}</td>
+                  <td>
+                    <a href="{% url 'dashboard_project_detail' client.project.id %}" class="text-decoration-none text-reset">{{ client.project.name }}</a>
+                  </td>
                   <td class="small muted">{% if client.email %}{{ client.email }}{% endif %}{% if client.email and client.phone %} | {% endif %}{% if client.phone %}{{ client.phone }}{% endif %}</td>
                 </tr>
               {% empty %}

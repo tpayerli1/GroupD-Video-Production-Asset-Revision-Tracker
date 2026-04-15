@@ -59,6 +59,36 @@ class DashboardSearchTests(TestCase):
         self.assertEqual(len(media_list), 1)
         self.assertEqual(media_list[0], self.media)
 
+    def test_media_search_supports_multiple_space_separated_terms(self):
+        response = self.client.get(
+            reverse("dashboard_media"),
+            {"q": "lake prores", "projects": "1", "clients": "1", "tags": "1", "metadata": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        media_list = list(response.context["media_list"])
+
+        self.assertEqual(len(media_list), 1)
+        self.assertEqual(media_list[0], self.media)
+
+    def test_media_search_matches_any_space_separated_term(self):
+        other_media = Media.objects.create(
+            batch=self.batch,
+            project=self.project,
+            file_name="behind-scenes.jpg",
+            file_path="C:\\media\\behind-scenes.jpg",
+        )
+
+        response = self.client.get(
+            reverse("dashboard_media"),
+            {"q": "jpg mp4", "projects": "1", "clients": "1", "tags": "1", "metadata": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        media_list = list(response.context["media_list"])
+
+        self.assertEqual({item.id for item in media_list}, {self.media.id, other_media.id})
+
 
 class MediaMetadataProbeApiTests(TestCase):
     def setUp(self):
@@ -329,6 +359,13 @@ class DashboardNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lake House Studio")
 
+    def test_client_detail_page_shows_project_and_media_links(self):
+        response = self.client.get(reverse("dashboard_client_detail", args=[self.client_obj.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lake Project")
+        self.assertContains(response, "lake-broll.mp4")
+
     def test_dashboard_projects_page_can_create_project(self):
         response = self.client.post(
             reverse("dashboard_projects"),
@@ -395,3 +432,18 @@ class DashboardNavigationTests(TestCase):
         self.other_media.refresh_from_db()
         self.assertIn("favorite", list(self.media.tags.values_list("name", flat=True)))
         self.assertNotIn("favorite", list(self.other_media.tags.values_list("name", flat=True)))
+
+    def test_media_detail_page_can_add_tags(self):
+        self.client.login(username="navuser", password="secret123")
+
+        response = self.client.post(
+            reverse("dashboard_media_detail", args=[self.media.id]),
+            {"tags": "hero, homepage"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.media.refresh_from_db()
+        self.assertEqual(
+            list(self.media.tags.order_by("name").values_list("name", flat=True)),
+            ["hero", "homepage", "lake"],
+        )

@@ -293,6 +293,24 @@ npm start
 
 This launches the VISA uploader window.
 
+## Windows quick-start scripts
+
+From the repo root you can use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-django.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-electron.ps1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-visa.ps1
+```
+
+`start-django.ps1` runs Django with the local `.venv`, `start-electron.ps1` launches the uploader, and `start-visa.ps1` opens both in separate PowerShell windows.
+
 ---
 
 # 🔗 Electron ↔ Django Requirements

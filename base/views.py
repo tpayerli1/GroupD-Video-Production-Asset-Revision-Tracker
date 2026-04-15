@@ -34,6 +34,17 @@ def _empty_search_state():
     }
 
 
+def _search_terms(query):
+    return [term for term in (query or "").split() if term]
+
+
+def _any_term_query(terms, builder):
+    combined = Q()
+    for term in terms:
+        combined |= builder(term)
+    return combined
+
+
 def _parse_tags(raw):
     if not raw:
         return []
@@ -103,19 +114,25 @@ def _search_dashboard(query, search_state):
         "total": 0,
     }
 
-    if not query:
+    terms = _search_terms(query)
+    if not terms:
         return results
 
     if search_state["projects"]:
         results["projects"] = list(
             Project.objects.filter(
-                Q(name__icontains=query) |
-                Q(location__icontains=query) |
-                Q(customers__company_name__icontains=query) |
-                Q(customers__first_name__icontains=query) |
-                Q(customers__last_name__icontains=query) |
-                Q(media__file_name__icontains=query) |
-                Q(media__file_path__icontains=query)
+                _any_term_query(
+                    terms,
+                    lambda term: (
+                        Q(name__icontains=term) |
+                        Q(location__icontains=term) |
+                        Q(customers__company_name__icontains=term) |
+                        Q(customers__first_name__icontains=term) |
+                        Q(customers__last_name__icontains=term) |
+                        Q(media__file_name__icontains=term) |
+                        Q(media__file_path__icontains=term)
+                    ),
+                )
             )
             .annotate(
                 media_total=Count("media", distinct=True),
@@ -128,9 +145,14 @@ def _search_dashboard(query, search_state):
     if search_state["tags"]:
         results["tags"] = list(
             Tag.objects.filter(
-                Q(name__icontains=query) |
-                Q(media__file_name__icontains=query) |
-                Q(media__file_path__icontains=query)
+                _any_term_query(
+                    terms,
+                    lambda term: (
+                        Q(name__icontains=term) |
+                        Q(media__file_name__icontains=term) |
+                        Q(media__file_path__icontains=term)
+                    ),
+                )
             )
             .annotate(media_total=Count("media", distinct=True))
             .order_by("name")
@@ -139,14 +161,18 @@ def _search_dashboard(query, search_state):
 
     if search_state["clients"]:
         results["clients"] = list(
-            Customer.objects.select_related("project")
-            .filter(
-                Q(company_name__icontains=query) |
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(email__icontains=query) |
-                Q(phone__icontains=query) |
-                Q(project__name__icontains=query)
+            Customer.objects.select_related("project").filter(
+                _any_term_query(
+                    terms,
+                    lambda term: (
+                        Q(company_name__icontains=term) |
+                        Q(first_name__icontains=term) |
+                        Q(last_name__icontains=term) |
+                        Q(email__icontains=term) |
+                        Q(phone__icontains=term) |
+                        Q(project__name__icontains=term)
+                    ),
+                )
             )
             .order_by("company_name", "last_name", "first_name")
             .distinct()
@@ -157,14 +183,19 @@ def _search_dashboard(query, search_state):
             Media.objects.select_related("project", "metadata")
             .prefetch_related("tags")
             .filter(
-                Q(file_name__icontains=query) |
-                Q(file_path__icontains=query) |
-                Q(project__name__icontains=query) |
-                Q(tags__name__icontains=query) |
-                Q(metadata__file_type__icontains=query) |
-                Q(metadata__codec__icontains=query) |
-                Q(metadata__color_space__icontains=query) |
-                Q(metadata__aspect_ratio__icontains=query)
+                _any_term_query(
+                    terms,
+                    lambda term: (
+                        Q(file_name__icontains=term) |
+                        Q(file_path__icontains=term) |
+                        Q(project__name__icontains=term) |
+                        Q(tags__name__icontains=term) |
+                        Q(metadata__file_type__icontains=term) |
+                        Q(metadata__codec__icontains=term) |
+                        Q(metadata__color_space__icontains=term) |
+                        Q(metadata__aspect_ratio__icontains=term)
+                    ),
+                )
             )
             .order_by("-created_at")
             .distinct()
@@ -241,6 +272,7 @@ def _resolve_tags_for_user(tag_names, user=None):
 
 def _project_media_queryset(project, q="", client_id="", tag_id="", search_state=None):
     search_state = search_state or _empty_search_state()
+    terms = _search_terms(q)
 
     media = (
         project.media.select_related("metadata", "batch")
@@ -248,18 +280,24 @@ def _project_media_queryset(project, q="", client_id="", tag_id="", search_state
         .order_by("file_name")
     )
 
-    if q:
-        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
-        if search_state["tags"]:
-            q_filter |= Q(tags__name__icontains=q)
-        if search_state["metadata"]:
-            q_filter |= (
-                Q(metadata__file_type__icontains=q)
-                | Q(metadata__codec__icontains=q)
-                | Q(metadata__color_space__icontains=q)
-                | Q(metadata__aspect_ratio__icontains=q)
+    if terms:
+        media = media.filter(
+            _any_term_query(
+                terms,
+                lambda term: (
+                    Q(file_name__icontains=term) |
+                    Q(file_path__icontains=term) |
+                    (Q(tags__name__icontains=term) if search_state["tags"] else Q()) |
+                    (
+                        Q(metadata__file_type__icontains=term)
+                        | Q(metadata__codec__icontains=term)
+                        | Q(metadata__color_space__icontains=term)
+                        | Q(metadata__aspect_ratio__icontains=term)
+                        if search_state["metadata"] else Q()
+                    )
+                ),
             )
-        media = media.filter(q_filter).distinct()
+        ).distinct()
 
     if client_id.isdigit():
         media = media.filter(project__customers__id=int(client_id)).distinct()
@@ -323,13 +361,19 @@ def dashboard_clients(request):
     project_id = (request.GET.get("project_id") or "").strip()
 
     clients = Customer.objects.select_related("project").order_by("project__name", "company_name", "last_name", "first_name")
-    if q:
+    terms = _search_terms(q)
+    if terms:
         clients = clients.filter(
-            Q(company_name__icontains=q)
-            | Q(first_name__icontains=q)
-            | Q(last_name__icontains=q)
-            | Q(email__icontains=q)
-            | Q(project__name__icontains=q)
+            _any_term_query(
+                terms,
+                lambda term: (
+                    Q(company_name__icontains=term)
+                    | Q(first_name__icontains=term)
+                    | Q(last_name__icontains=term)
+                    | Q(email__icontains=term)
+                    | Q(project__name__icontains=term)
+                ),
+            )
         )
     if project_id.isdigit():
         clients = clients.filter(project_id=int(project_id))
@@ -380,13 +424,19 @@ def dashboard_projects(request):
         )
         .order_by("name")
     )
-    if q:
+    terms = _search_terms(q)
+    if terms:
         projects = projects.filter(
-            Q(name__icontains=q)
-            | Q(location__icontains=q)
-            | Q(customers__company_name__icontains=q)
-            | Q(customers__first_name__icontains=q)
-            | Q(customers__last_name__icontains=q)
+            _any_term_query(
+                terms,
+                lambda term: (
+                    Q(name__icontains=term)
+                    | Q(location__icontains=term)
+                    | Q(customers__company_name__icontains=term)
+                    | Q(customers__first_name__icontains=term)
+                    | Q(customers__last_name__icontains=term)
+                ),
+            )
         ).distinct()
     if client_id.isdigit():
         projects = projects.filter(customers__id=int(client_id)).distinct()
@@ -500,14 +550,49 @@ def dashboard_project_detail(request, project_id):
     )
 
 
+def dashboard_client_detail(request, client_id):
+    client = get_object_or_404(
+        Customer.objects.select_related("project").annotate(
+            project_media_total=Count("project__media", distinct=True),
+            project_tag_total=Count("project__media__tags", distinct=True),
+        ),
+        id=client_id,
+    )
+
+    media_list = (
+        client.project.media.select_related("metadata", "batch")
+        .prefetch_related("tags")
+        .order_by("file_name")
+    )
+
+    return render(
+        request,
+        "base/dashboard_client_detail.html",
+        {
+            "client": client,
+            "project": client.project,
+            "media_list": media_list,
+            "media_count": media_list.count(),
+            "project_clients": client.project.customers.order_by("company_name", "last_name", "first_name"),
+            **_base_context(),
+        },
+    )
+
+
 def dashboard_tags(request):
     q = (request.GET.get("q") or "").strip()
     creator = (request.GET.get("creator") or "").strip()
     project_id = (request.GET.get("project_id") or "").strip()
 
     tags = Tag.objects.select_related("user").annotate(media_total=Count("media", distinct=True)).order_by("name")
-    if q:
-        tags = tags.filter(Q(name__icontains=q) | Q(media__file_name__icontains=q)).distinct()
+    terms = _search_terms(q)
+    if terms:
+        tags = tags.filter(
+            _any_term_query(
+                terms,
+                lambda term: Q(name__icontains=term) | Q(media__file_name__icontains=term),
+            )
+        ).distinct()
     if creator == "me" and request.user.is_authenticated:
         tags = tags.filter(user=request.user)
     elif creator == "loose":
@@ -540,26 +625,34 @@ def dashboard_media(request):
         .order_by("project__name", "file_name")
     )
 
-    if q:
-        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
-        if search_state["projects"]:
-            q_filter |= Q(project__name__icontains=q) | Q(project__location__icontains=q)
-        if search_state["clients"]:
-            q_filter |= (
-                Q(project__customers__company_name__icontains=q)
-                | Q(project__customers__first_name__icontains=q)
-                | Q(project__customers__last_name__icontains=q)
+    terms = _search_terms(q)
+    if terms:
+        media = media.filter(
+            _any_term_query(
+                terms,
+                lambda term: (
+                    Q(file_name__icontains=term)
+                    | Q(file_path__icontains=term)
+                    | ((Q(project__name__icontains=term) | Q(project__location__icontains=term)) if search_state["projects"] else Q())
+                    | (
+                        (
+                            Q(project__customers__company_name__icontains=term)
+                            | Q(project__customers__first_name__icontains=term)
+                            | Q(project__customers__last_name__icontains=term)
+                        ) if search_state["clients"] else Q()
+                    )
+                    | (Q(tags__name__icontains=term) if search_state["tags"] else Q())
+                    | (
+                        (
+                            Q(metadata__file_type__icontains=term)
+                            | Q(metadata__codec__icontains=term)
+                            | Q(metadata__color_space__icontains=term)
+                            | Q(metadata__aspect_ratio__icontains=term)
+                        ) if search_state["metadata"] else Q()
+                    )
+                ),
             )
-        if search_state["tags"]:
-            q_filter |= Q(tags__name__icontains=q)
-        if search_state["metadata"]:
-            q_filter |= (
-                Q(metadata__file_type__icontains=q)
-                | Q(metadata__codec__icontains=q)
-                | Q(metadata__color_space__icontains=q)
-                | Q(metadata__aspect_ratio__icontains=q)
-            )
-        media = media.filter(q_filter).distinct()
+        ).distinct()
 
     if project_id.isdigit():
         media = media.filter(project_id=int(project_id))
@@ -583,6 +676,43 @@ def dashboard_media(request):
                 "tag_id": tag_id,
             },
             **_base_context(search_state),
+        },
+    )
+
+
+def dashboard_media_detail(request, media_id):
+    media = get_object_or_404(
+        Media.objects.select_related("project", "metadata", "batch").prefetch_related("tags", "project__customers"),
+        id=media_id,
+    )
+
+    if request.method == "POST":
+        tag_names = _parse_tags(request.POST.get("tags"))
+        if not tag_names:
+            messages.error(request, "Enter at least one tag to add to this media.")
+        else:
+            tags, claimed_tag_count = _resolve_tags_for_user(tag_names, request.user)
+            created_links = 0
+            for tag in tags:
+                _, created = MediaTag.objects.get_or_create(media=media, tag=tag)
+                if created:
+                    created_links += 1
+
+            message = f'Added {len(tag_names)} tag{"s" if len(tag_names) != 1 else ""} to "{media.file_name}".'
+            if created_links:
+                message += f" Created {created_links} new tag link{'s' if created_links != 1 else ''}."
+            if claimed_tag_count:
+                message += f" Claimed {claimed_tag_count} loose tag{'s' if claimed_tag_count != 1 else ''} for your account."
+            messages.success(request, message)
+            return redirect("dashboard_media_detail", media_id=media.id)
+
+    return render(
+        request,
+        "base/dashboard_media_detail.html",
+        {
+            "media": media,
+            "project_clients": media.project.customers.order_by("company_name", "last_name", "first_name") if media.project else [],
+            **_base_context(),
         },
     )
 

@@ -5,7 +5,7 @@
 {% block content %}
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
-      <a href="{% url 'dashboard_projects' %}" class="btn btn-sm btn-outline-visa mb-3">← Back</a>
+      <a href="{% url 'dashboard_projects' %}" class="btn btn-sm btn-outline-visa mb-3">&larr; Back</a>
       <div class="section-label mb-2">Project detail</div>
       <h1 class="h3 mb-1">{{ project.name }}</h1>
       <div class="muted">
@@ -33,11 +33,11 @@
         <div class="p-4">
           <div class="d-grid gap-2 mb-4">
             {% for client in clients %}
-              <div class="rounded-4 border border-secondary-subtle p-3">
+              <a href="{% url 'dashboard_client_detail' client.id %}" class="rounded-4 border border-secondary-subtle p-3 text-decoration-none text-reset">
                 <div class="fw-semibold text-light">{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
                 <div class="small muted">{{ client.first_name }} {{ client.last_name }}</div>
                 <div class="small muted">{% if client.email %}{{ client.email }}{% endif %}{% if client.email and client.phone %} | {% endif %}{% if client.phone %}{{ client.phone }}{% endif %}</div>
-              </div>
+              </a>
             {% empty %}
               <div class="rounded-4 border border-secondary-subtle p-3 muted">No clients attached yet.</div>
             {% endfor %}
@@ -118,7 +118,7 @@
           <form method="get" class="row g-3 align-items-end">
             <div class="col-12 col-lg-5">
               <label class="form-label muted small text-uppercase">Search Project Media</label>
-              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="File, path, codec, tag...">
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="lake mp4 prores favorite">
             </div>
             <div class="col-12 col-md-6 col-lg-3">
               <label class="form-label muted small text-uppercase">Client</label>
@@ -173,14 +173,14 @@
               {% for media in media_list %}
                 <tr>
                   <td>
-                    <div class="fw-semibold text-light">{{ media.file_name }}</div>
+                    <a href="{% url 'dashboard_media_detail' media.id %}" class="fw-semibold text-light text-decoration-none">{{ media.file_name }}</a>
                     <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">{{ media.file_path }}</div>
                   </td>
                   <td>
                     {% if media.batch %}
                       <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">#{{ media.batch.id }}</span>
                     {% else %}
-                      <span class="muted">—</span>
+                      <span class="muted">-</span>
                     {% endif %}
                   </td>
                   <td>
@@ -188,7 +188,7 @@
                       {% for tag in media.tags.all %}
                         <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
                       {% empty %}
-                        <span class="muted">—</span>
+                        <span class="muted">-</span>
                       {% endfor %}
                     </div>
                   </td>

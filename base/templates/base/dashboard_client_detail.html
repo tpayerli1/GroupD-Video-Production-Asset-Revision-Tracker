@@ -1,0 +1,113 @@
+{% extends "base/base.html" %}
+
+{% block title %}Client {{ client.first_name }} {{ client.last_name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <a href="{% url 'dashboard_clients' %}" class="btn btn-sm btn-outline-visa mb-3">&larr; Back</a>
+      <div class="section-label mb-2">Client detail</div>
+      <h1 class="h3 mb-1">{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</h1>
+      <div class="muted">{{ client.first_name }} {{ client.last_name }} | {{ media_count }} related media file{{ media_count|pluralize }}</div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-4">
+      <div class="visa-glass-soft card-visa h-100">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Project Link</div>
+          <div class="small muted">Clients currently belong to one project in this data model.</div>
+        </div>
+        <div class="p-4 d-grid gap-3">
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Attached project</div>
+            <a href="{% url 'dashboard_project_detail' project.id %}" class="fw-semibold text-light text-decoration-none">{{ project.name }}</a>
+            <div class="small muted mt-2">{{ project.location|default:"No location saved" }}</div>
+            <div class="small muted mt-2">{{ client.project_media_total }} media | {{ client.project_tag_total }} tags in project</div>
+          </div>
+
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Contact</div>
+            <div class="fw-semibold text-light">{{ client.first_name }} {{ client.last_name }}</div>
+            <div class="small muted mt-2">{% if client.email %}{{ client.email }}{% else %}No email saved{% endif %}</div>
+            <div class="small muted">{% if client.phone %}{{ client.phone }}{% else %}No phone saved{% endif %}</div>
+          </div>
+
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Also on this project</div>
+            {% for teammate in project_clients %}
+              <div class="small {% if teammate.id == client.id %}text-light{% else %}muted{% endif %}">
+                {% if teammate.company_name %}{{ teammate.company_name }}{% else %}{{ teammate.first_name }} {{ teammate.last_name }}{% endif %}
+              </div>
+            {% empty %}
+              <div class="small muted">No other clients attached.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="fw-semibold">Project Media</div>
+            <div class="small muted">Media attached to {{ project.name }} and therefore visible for this client relationship.</div>
+          </div>
+          <a href="{% url 'dashboard_media' %}?client_id={{ client.id }}" class="btn btn-sm btn-outline-visa">Open in media view</a>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-visa table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Batch</th>
+                <th>Tags</th>
+                <th>Metadata</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for media in media_list %}
+                <tr>
+                  <td>
+                    <a href="{% url 'dashboard_media_detail' media.id %}" class="fw-semibold text-light text-decoration-none">{{ media.file_name }}</a>
+                    <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">{{ media.file_path }}</div>
+                  </td>
+                  <td>
+                    {% if media.batch %}
+                      <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">#{{ media.batch.id }}</span>
+                    {% else %}
+                      <span class="muted">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-2">
+                      {% for tag in media.tags.all %}
+                        <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
+                      {% empty %}
+                        <span class="muted">-</span>
+                      {% endfor %}
+                    </div>
+                  </td>
+                  <td class="small muted">
+                    {% if media.metadata %}
+                      {{ media.metadata.file_type|default:"unknown" }}
+                      {% if media.metadata.resolution %}| {{ media.metadata.resolution }}{% endif %}
+                      {% if media.metadata.codec %}| {{ media.metadata.codec }}{% endif %}
+                    {% else %}
+                      No metadata
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4" class="text-center py-5"><div class="muted">No media attached to this client's project yet.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

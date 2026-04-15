@@ -1,0 +1,151 @@
+{% extends "base/base.html" %}
+
+{% block title %}Media {{ media.file_name }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <a href="{% url 'dashboard_media' %}" class="btn btn-sm btn-outline-visa mb-3">&larr; Back</a>
+      <div class="section-label mb-2">Media detail</div>
+      <h1 class="h3 mb-1">{{ media.file_name }}</h1>
+      <div class="muted">{{ media.file_path }}</div>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="d-grid gap-2 mb-4">
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-5">
+      <div class="visa-glass-soft card-visa mb-4">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Relationships</div>
+          <div class="small muted">Quick links back to the owning records.</div>
+        </div>
+        <div class="p-4 d-grid gap-3">
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Project</div>
+            {% if media.project %}
+              <a href="{% url 'dashboard_project_detail' media.project.id %}" class="fw-semibold text-light text-decoration-none">{{ media.project.name }}</a>
+              <div class="small muted mt-2">{{ media.project.location|default:"No location saved" }}</div>
+            {% else %}
+              <div class="muted">No project assigned</div>
+            {% endif %}
+          </div>
+
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Clients</div>
+            {% if media.project %}
+              {% for client in project_clients %}
+                <div>
+                  <a href="{% url 'dashboard_client_detail' client.id %}" class="text-decoration-none text-reset">
+                    {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                  </a>
+                </div>
+              {% empty %}
+                <div class="small muted">No clients attached to this project.</div>
+              {% endfor %}
+            {% else %}
+              <div class="small muted">Assign a project before client links appear.</div>
+            {% endif %}
+          </div>
+
+          <div class="rounded-4 border border-secondary-subtle p-3">
+            <div class="small muted text-uppercase mb-2">Batch</div>
+            {% if media.batch %}
+              <a href="{% url 'dashboard_batch_detail' media.batch.id %}" class="text-decoration-none text-reset">Batch #{{ media.batch.id }}</a>
+            {% else %}
+              <div class="small muted">No batch linked</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Add Tags</div>
+          <div class="small muted">Append more tags to this individual media record.</div>
+        </div>
+        <div class="p-4">
+          <form method="post">
+            {% csrf_token %}
+            {% include "base/partials/tag_input.html" with hidden_input_name="tags" hidden_input_value="" placeholder="Type tags and press space" help_text="Existing tags stay attached. New tags will be added below." %}
+            <div class="d-flex justify-content-end mt-3">
+              <button class="btn btn-visa-primary px-4">Save Tags</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+      <div class="visa-glass-soft card-visa mb-4">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Current Tags</div>
+          <div class="small muted">All tags already linked to this file.</div>
+        </div>
+        <div class="p-4">
+          <div class="d-flex flex-wrap gap-2">
+            {% for tag in media.tags.all %}
+              <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
+            {% empty %}
+              <span class="muted">No tags yet.</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Metadata</div>
+          <div class="small muted">Technical information captured for this media file.</div>
+        </div>
+        <div class="p-4">
+          {% if media.metadata %}
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">File Type</div>
+                <div>{{ media.metadata.file_type|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Resolution</div>
+                <div>{{ media.metadata.resolution|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Codec</div>
+                <div>{{ media.metadata.codec|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Duration</div>
+                <div>{{ media.metadata.duration|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Color Space</div>
+                <div>{{ media.metadata.color_space|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Aspect Ratio</div>
+                <div>{{ media.metadata.aspect_ratio|default:media.metadata.derived_aspect_ratio|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">Frame Rate</div>
+                <div>{{ media.metadata.frame_rate|default:"Unknown" }}</div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="small muted text-uppercase">HDR</div>
+                <div>{{ media.metadata.hdr|yesno:"Yes,No,Unknown" }}</div>
+              </div>
+            </div>
+          {% else %}
+            <div class="muted">No metadata has been saved for this media record yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -16,7 +16,7 @@
       <form method="get" class="row g-3 align-items-end">
         <div class="col-12 col-xl-4">
           <label class="form-label muted small text-uppercase">Search</label>
-          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Lake, .mp4, codec, tag...">
+          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Lake mp4 prores shoreline">
         </div>
         <div class="col-12 col-md-4 col-xl-2">
           <label class="form-label muted small text-uppercase">Project</label>
@@ -90,24 +90,28 @@
             <tr>
               <td>
                 {% if media.project %}
-                  <span class="fw-semibold text-light">{{ media.project.name }}</span>
+                  <a href="{% url 'dashboard_project_detail' media.project.id %}" class="fw-semibold text-light text-decoration-none">{{ media.project.name }}</a>
                 {% else %}
                   <span class="muted">Unassigned</span>
                 {% endif %}
               </td>
               <td>
-                <div class="fw-semibold text-light">{{ media.file_name }}</div>
+                <a href="{% url 'dashboard_media_detail' media.id %}" class="fw-semibold text-light text-decoration-none">{{ media.file_name }}</a>
                 <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">{{ media.file_path }}</div>
               </td>
               <td class="small muted">
                 {% if media.project %}
                   {% for client in media.project.customers.all %}
-                    <div>{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
+                    <div>
+                      <a href="{% url 'dashboard_client_detail' client.id %}" class="text-decoration-none text-reset">
+                        {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                      </a>
+                    </div>
                   {% empty %}
-                    —
+                    -
                   {% endfor %}
                 {% else %}
-                  —
+                  -
                 {% endif %}
               </td>
               <td>
@@ -115,7 +119,7 @@
                   {% for tag in media.tags.all %}
                     <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
                   {% empty %}
-                    <span class="muted">—</span>
+                    <span class="muted">-</span>
                   {% endfor %}
                 </div>
               </td>
