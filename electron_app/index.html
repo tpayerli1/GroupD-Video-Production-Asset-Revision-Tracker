@@ -21,7 +21,7 @@
     </script>
   </head>
 
-  <body class="min-h-screen bg-[#060b14] text-slate-100 antialiased overflow-hidden">
+  <body class="min-h-screen bg-[#060b14] text-slate-100 antialiased">
     <div class="pointer-events-none fixed inset-0">
       <div
         class="absolute inset-0"
@@ -238,6 +238,31 @@
                 Reset batch
               </button>
             </div>
+
+            <section class="rounded-2xl border border-slate-800/80 bg-slate-950/70">
+              <div class="flex items-center gap-3 px-4 py-4 md:px-5">
+                <div
+                  class="grid h-9 w-9 place-items-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-300"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="opacity-90">
+                    <path
+                      d="M4 5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v14l-4-2-4 2-4-2-4 2V5Zm3-1a1 1 0 0 0-1 1v10.764l2-.999 4 2 4-2 2 .999V5a1 1 0 0 0-1-1H7Zm2 4h6a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2Zm0 4h6a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2Z"
+                    />
+                  </svg>
+                </div>
+
+                <div class="min-w-0">
+                  <div class="text-sm font-semibold text-slate-100">Metadata activity</div>
+                  <div class="text-xs text-slate-400">Background probe and save results. Ingest keeps going either way.</div>
+                </div>
+              </div>
+
+              <div id="metadataLog" class="max-h-56 space-y-2 overflow-y-auto px-4 pb-4 md:px-5 md:pb-5">
+                <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 px-4 py-3 text-sm text-slate-400">
+                  Metadata worker idle.
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -255,6 +280,29 @@
       const tagsInput = document.getElementById("tagsInput");
       const addTagsBtn = document.getElementById("addTagsBtn");
       const resetBatchBtn = document.getElementById("resetBatchBtn");
+      const metadataLog = document.getElementById("metadataLog");
+
+      function addMetadataLog(message, tone = "neutral") {
+        if (!metadataLog) return;
+
+        const tones = {
+          neutral: "border-slate-800/80 bg-slate-900/60 text-slate-300",
+          success: "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+          error: "border-rose-400/20 bg-rose-400/10 text-rose-200",
+          info: "border-sky-400/20 bg-sky-400/10 text-sky-200",
+        };
+
+        const entry = document.createElement("div");
+        entry.className = `rounded-2xl border px-4 py-3 text-sm ${tones[tone] || tones.neutral}`;
+        entry.textContent = message;
+
+        const idleEntry = metadataLog.firstElementChild;
+        if (idleEntry && idleEntry.textContent?.includes("Metadata worker idle.")) {
+          metadataLog.innerHTML = "";
+        }
+
+        metadataLog.prepend(entry);
+      }
 
       async function ensureBatch(payload = {}) {
         const res = await window.uploader.post(`${API_BASE}/api/batches/ensure/`, payload);
@@ -280,11 +328,34 @@
         return window.uploader.post(`${API_BASE}/api/media_files/`, payload);
       }
 
-      async function probeMediaMetadata(paths) {
-        const { ffprobePath } = await getBinaryPaths();
-        const payload = { paths: paths || [] };
-        if (ffprobePath) payload.ffprobe_path = ffprobePath;
-        return window.uploader.post(`${API_BASE}/api/media/metadata/probe/`, payload);
+      async function saveMediaMetadata(filePath, metadata) {
+        return window.uploader.post(`${API_BASE}/api/media/metadata/save/`, {
+          file_path: filePath,
+          metadata,
+        });
+      }
+
+      async function processMetadataInBackground(paths) {
+        if (!paths?.length) return;
+
+        addMetadataLog(`Metadata queue started for ${paths.length} file${paths.length === 1 ? "" : "s"}.`, "info");
+
+        for (const filePath of paths) {
+          try {
+            addMetadataLog(`Probing ${filePath}`, "neutral");
+            const metadata = await window.uploader.probeMediaFile(filePath);
+            const saveRes = await saveMediaMetadata(filePath, metadata);
+            const result = saveRes?.processed?.[0];
+            addMetadataLog(
+              `${result?.status === "created" ? "Saved" : "Updated"} metadata for ${filePath}`,
+              "success"
+            );
+          } catch (error) {
+            addMetadataLog(`Metadata failed for ${filePath}: ${error?.message || error}`, "error");
+          }
+        }
+
+        addMetadataLog("Metadata queue finished.", "info");
       }
 
       ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
@@ -314,15 +385,8 @@
         try {
           statusText.textContent = `Sending ${paths.length}...`;
           const res = await sendMedia(paths);
-
-          try {
-            statusText.textContent = `Batch ${batchId} | probing metadata...`;
-            const probeRes = await probeMediaMetadata(paths);
-            const completedMetadata = (probeRes.created || 0) + (probeRes.updated || 0);
-            statusText.textContent = `Batch ${batchId} | +${res.created} new | ${res.updated} existing | metadata ${completedMetadata}/${probeRes.processed_count}`;
-          } catch (probeErr) {
-            statusText.textContent = `Batch ${batchId} | ingest saved, metadata probe failed: ${probeErr?.message || probeErr}`;
-          }
+          statusText.textContent = `Batch ${batchId} | +${res.created} new | ${res.updated} existing`;
+          processMetadataInBackground(paths);
         } catch (err) {
           statusText.textContent = `Error: ${err?.message || err}`;
         }

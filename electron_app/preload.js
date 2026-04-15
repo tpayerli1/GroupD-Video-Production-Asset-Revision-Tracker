@@ -24,4 +24,5 @@ contextBridge.exposeInMainWorld("uploader", {
     return data;
   },
   getBinaryPaths: () => ipcRenderer.invoke("uploader:get-binary-paths"),
+  probeMediaFile: (filePath) => ipcRenderer.invoke("uploader:probe-media-file", filePath),
 });

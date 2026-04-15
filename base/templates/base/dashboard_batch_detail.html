@@ -25,10 +25,31 @@
       <div class="visa-glass-soft card-visa h-100">
         <div class="content-card-header px-4 py-3">
           <div class="fw-semibold">Assign Project</div>
-          <div class="small muted">Attach this batch to an existing project or create a new one.</div>
+          <div class="small muted">Attach this batch to an existing project, or create a new project and client together.</div>
         </div>
 
         <div class="p-4">
+          {% if messages %}
+            <div class="d-grid gap-2 mb-3">
+              {% for message in messages %}
+                <div class="alert alert-success mb-0" role="alert">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% if assignment_errors %}
+            <div class="alert alert-danger" role="alert">
+              <div class="fw-semibold mb-2">Assignment needs one more pass.</div>
+              <ul class="mb-0 ps-3">
+                {% for error in assignment_errors %}
+                  <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
           <form method="post" action="{% url 'dashboard_batch_assign_project' batch.id %}">
             {% csrf_token %}
 
@@ -41,7 +62,7 @@
               >
                 <option value="">Select project…</option>
                 {% for p in projects %}
-                  <option value="{{ p.id }}">{{ p.name }}</option>
+                  <option value="{{ p.id }}" {% if assignment_form.project_id == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -55,11 +76,86 @@
                 type="text"
                 class="form-control search-input"
                 placeholder="New project name"
+                value="{{ assignment_form.new_project_name }}"
               >
             </div>
 
+            <label class="filter-chip w-100 justify-content-between mb-3" for="createClientToggle">
+              <span>Create client with project</span>
+              <input
+                id="createClientToggle"
+                type="checkbox"
+                name="create_client"
+                value="1"
+                {% if assignment_form.create_client %}checked{% endif %}
+              >
+            </label>
+
+            <div
+              id="clientFields"
+              class="rounded-4 border border-secondary-subtle p-3 mb-3 {% if not assignment_form.create_client %}d-none{% endif %}"
+            >
+              <div class="fw-semibold mb-1">New client</div>
+              <div class="small muted mb-3">Use this only when you are creating a new project for this batch.</div>
+
+              <div class="mb-3">
+                <label class="form-label muted small text-uppercase">Company Name</label>
+                <input
+                  name="company_name"
+                  type="text"
+                  class="form-control search-input"
+                  placeholder="Optional company or studio"
+                  value="{{ assignment_form.company_name }}"
+                >
+              </div>
+
+              <div class="row g-3">
+                <div class="col-12 col-md-6">
+                  <label class="form-label muted small text-uppercase">First Name</label>
+                  <input
+                    name="first_name"
+                    type="text"
+                    class="form-control search-input"
+                    value="{{ assignment_form.first_name }}"
+                  >
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label muted small text-uppercase">Last Name</label>
+                  <input
+                    name="last_name"
+                    type="text"
+                    class="form-control search-input"
+                    value="{{ assignment_form.last_name }}"
+                  >
+                </div>
+              </div>
+
+              <div class="row g-3 mt-0">
+                <div class="col-12 col-md-6">
+                  <label class="form-label muted small text-uppercase">Email</label>
+                  <input
+                    name="email"
+                    type="email"
+                    class="form-control search-input"
+                    value="{{ assignment_form.email }}"
+                  >
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label muted small text-uppercase">Phone</label>
+                  <input
+                    name="phone"
+                    type="text"
+                    class="form-control search-input"
+                    value="{{ assignment_form.phone }}"
+                  >
+                </div>
+              </div>
+            </div>
+
             <button class="btn btn-visa-primary w-100 py-3">
-              Assign Project to Batch
+              Save Batch Assignment
             </button>
           </form>
         </div>
@@ -67,6 +163,32 @@
     </div>
 
     <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa mb-4">
+        <div class="content-card-header px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="fw-semibold">Batch Tags</div>
+            <div class="small muted">Apply reusable tags across every file in this batch.</div>
+          </div>
+
+          <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">
+            {{ assignment_form.tags|length }} tag{{ assignment_form.tags|length|pluralize }}
+          </span>
+        </div>
+
+        <div class="p-4">
+          <form method="post" action="{% url 'dashboard_batch_assign_project' batch.id %}">
+            {% csrf_token %}
+            {% include "base/partials/tag_input.html" with hidden_input_name="tags" hidden_input_value=assignment_form.tags_value placeholder="Type a tag and press space" help_text="Press space, comma, enter, or tab to create each tag." %}
+
+            <div class="d-flex justify-content-end mt-3">
+              <button class="btn btn-outline-visa px-4">
+                Save Tags
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="visa-glass-soft card-visa">
         <div class="content-card-header px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
@@ -86,6 +208,7 @@
                 <th>File Name</th>
                 <th>Path</th>
                 <th>Project</th>
+                <th>Tags</th>
                 <th class="text-nowrap">Created</th>
               </tr>
             </thead>
@@ -113,11 +236,25 @@
                     {% endif %}
                   </td>
 
+                  <td style="max-width: 220px;">
+                    {% if m.tags.all %}
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for tag in m.tags.all %}
+                          <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">
+                            {{ tag.name }}
+                          </span>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <span class="muted">â€”</span>
+                    {% endif %}
+                  </td>
+
                   <td class="text-nowrap">{{ m.created_at }}</td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="4" class="text-center py-5">
+                  <td colspan="5" class="text-center py-5">
                     <div class="muted">No media in this batch.</div>
                   </td>
                 </tr>
@@ -128,4 +265,20 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    const createClientToggle = document.getElementById("createClientToggle");
+    const clientFields = document.getElementById("clientFields");
+
+    if (createClientToggle && clientFields) {
+      const syncClientFields = () => {
+        clientFields.classList.toggle("d-none", !createClientToggle.checked);
+      };
+
+      createClientToggle.addEventListener("change", syncClientFields);
+      syncClientFields();
+    }
+  </script>
 {% endblock %}

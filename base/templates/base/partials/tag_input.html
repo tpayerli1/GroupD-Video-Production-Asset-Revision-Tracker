@@ -1,0 +1,24 @@
+<div class="visa-tag-editor" data-tag-input>
+  <input
+    type="hidden"
+    name="{{ hidden_input_name|default:'tags' }}"
+    value="{{ hidden_input_value|default:'' }}"
+    data-tag-hidden-input
+  >
+
+  <div class="visa-tag-shell">
+    <div class="visa-tag-list" data-tag-list></div>
+    <input
+      type="text"
+      class="visa-tag-entry"
+      data-tag-entry
+      placeholder="{{ placeholder|default:'Type a tag and press space' }}"
+      autocomplete="off"
+      spellcheck="false"
+    >
+  </div>
+
+  {% if help_text %}
+    <div class="small muted mt-2">{{ help_text }}</div>
+  {% endif %}
+</div>

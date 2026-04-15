@@ -1,10 +1,13 @@
 import json
 import os
 import subprocess
+from decimal import Decimal, InvalidOperation
+from datetime import timedelta, datetime
 
 from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from django.contrib import messages
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Count, Q
@@ -29,6 +32,45 @@ def _empty_search_state():
     }
 
 
+def _parse_tags(raw):
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        parts = raw
+    else:
+        parts = str(raw).split(",")
+    cleaned = []
+    for t in parts:
+        t = (t or "").strip()
+        if t:
+            cleaned.append(t.lower())
+    seen = set()
+    out = []
+    for t in cleaned:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _batch_assignment_state(data=None):
+    source = data or {}
+    raw_tags = source.get("tags")
+    parsed_tags = _parse_tags(raw_tags)
+    return {
+        "project_id": (source.get("project_id") or "").strip(),
+        "new_project_name": (source.get("new_project_name") or "").strip(),
+        "create_client": bool(source.get("create_client")),
+        "company_name": (source.get("company_name") or "").strip(),
+        "first_name": (source.get("first_name") or "").strip(),
+        "last_name": (source.get("last_name") or "").strip(),
+        "email": (source.get("email") or "").strip(),
+        "phone": (source.get("phone") or "").strip(),
+        "tags": parsed_tags,
+        "tags_value": ", ".join(parsed_tags),
+    }
+
+
 def _search_state_from_request(request):
     source = request.POST if request.method == "POST" else request.GET
 
@@ -42,6 +84,12 @@ def _search_state_from_request(request):
         selected = {scope: True for scope in SEARCH_SCOPES}
 
     return {"q": query, **selected}
+
+
+def _base_context(search_state=None):
+    return {
+        "search_state": search_state or _empty_search_state(),
+    }
 
 
 def _search_dashboard(query, search_state):
@@ -126,38 +174,22 @@ def _search_dashboard(query, search_state):
     return results
 
 
-def dashboard_home(request):
-    empty_batch_ids = (
-        Batch.objects
-        .annotate(media_count=Count("media"))
-        .filter(media_count=0)
-        .values_list("id", flat=True)
-    )
-    Batch.objects.filter(id__in=empty_batch_ids).delete()
-
-    search_state = _search_state_from_request(request)
-    search_results = _search_dashboard(search_state["q"], search_state)
-
-    batches = (
-        Batch.objects
-        .annotate(media_count=Count("media"))
-        .order_by("-created_at")
-    )
-
-    return render(
-        request,
-        "base/dashboard_home.html",
-        {
-            "batches": batches,
-            "search_state": search_state,
-            "search_results": search_results,
-        },
-    )
-
-def dashboard_batch_detail(request, batch_id):
+def _render_batch_detail(request, batch_id, assignment_form=None, assignment_errors=None, status_code=200):
     batch = get_object_or_404(Batch.objects.annotate(media_count=Count("media")), id=batch_id)
-    media = batch.media.order_by("-created_at")
+    media = batch.media.prefetch_related("tags").order_by("-created_at")
     projects = Project.objects.order_by("name")
+    default_form = assignment_form or _batch_assignment_state()
+
+    if not assignment_form:
+        batch_tags = list(
+            Tag.objects.filter(media__batch=batch)
+            .order_by("name")
+            .values_list("name", flat=True)
+            .distinct()
+        )
+        default_form["tags"] = batch_tags
+        default_form["tags_value"] = ", ".join(batch_tags)
+
     return render(
         request,
         "base/dashboard_batch_detail.html",
@@ -166,6 +198,262 @@ def dashboard_batch_detail(request, batch_id):
             "media": media,
             "projects": projects,
             "search_state": _empty_search_state(),
+            "assignment_form": default_form,
+            "assignment_errors": assignment_errors or [],
+        },
+        status=status_code,
+    )
+
+
+def _batch_has_unassigned_media(batch_id):
+    return Media.objects.filter(batch_id=batch_id, project__isnull=True).exists()
+
+
+def _resolve_tags_for_user(tag_names, user=None):
+    tags = []
+    claimed_count = 0
+
+    for name in tag_names:
+        tag = None
+
+        if user and getattr(user, "is_authenticated", False):
+            tag = Tag.objects.filter(user=user, name=name).first()
+
+        if tag is None:
+            tag = Tag.objects.filter(user__isnull=True, name=name).first()
+            if tag and user and getattr(user, "is_authenticated", False):
+                tag.user = user
+                tag.save(update_fields=["user"])
+                claimed_count += 1
+
+        if tag is None:
+            tag = Tag.objects.create(
+                user=user if user and getattr(user, "is_authenticated", False) else None,
+                name=name,
+            )
+
+        tags.append(tag)
+
+    return tags, claimed_count
+
+
+def dashboard_home(request):
+    batches = (
+        Batch.objects
+        .annotate(
+            media_count=Count("media", distinct=True),
+            unassigned_count=Count("media", filter=Q(media__project__isnull=True), distinct=True),
+        )
+        .filter(media_count__gt=0, unassigned_count__gt=0)
+        .order_by("-created_at")
+    )
+
+    return render(
+        request,
+        "base/dashboard_home.html",
+        {
+            "batches": batches,
+            **_base_context(),
+        },
+    )
+
+def dashboard_batch_detail(request, batch_id):
+    if not _batch_has_unassigned_media(batch_id):
+        messages.info(request, f"Batch #{batch_id} is fully assigned and has been removed from the active queue.")
+        return redirect("dashboard_home")
+
+    return _render_batch_detail(request, batch_id)
+
+
+def dashboard_clients(request):
+    if request.method == "POST":
+        project_id = request.POST.get("project_id") or ""
+        first_name = (request.POST.get("first_name") or "").strip()
+        last_name = (request.POST.get("last_name") or "").strip()
+
+        if not project_id.isdigit():
+            messages.error(request, "Choose a project before creating a client.")
+        elif not first_name or not last_name:
+            messages.error(request, "Client first and last name are required.")
+        else:
+            Customer.objects.create(
+                project_id=int(project_id),
+                company_name=(request.POST.get("company_name") or "").strip(),
+                first_name=first_name,
+                last_name=last_name,
+                email=(request.POST.get("email") or "").strip(),
+                phone=(request.POST.get("phone") or "").strip(),
+            )
+            messages.success(request, "Client created.")
+            return redirect("dashboard_clients")
+
+    q = (request.GET.get("q") or "").strip()
+    project_id = (request.GET.get("project_id") or "").strip()
+
+    clients = Customer.objects.select_related("project").order_by("project__name", "company_name", "last_name", "first_name")
+    if q:
+        clients = clients.filter(
+            Q(company_name__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(email__icontains=q)
+            | Q(project__name__icontains=q)
+        )
+    if project_id.isdigit():
+        clients = clients.filter(project_id=int(project_id))
+
+    return render(
+        request,
+        "base/dashboard_clients.html",
+        {
+            "clients": clients,
+            "projects": Project.objects.order_by("name"),
+            "filters": {"q": q, "project_id": project_id},
+            **_base_context(),
+        },
+    )
+
+
+def dashboard_projects(request):
+    if request.method == "POST":
+        project_name = (request.POST.get("name") or "").strip()
+        if not project_name:
+            messages.error(request, "Project name is required.")
+        else:
+            project = Project.objects.create(
+                name=project_name,
+                location=(request.POST.get("location") or "").strip(),
+            )
+            client_first_name = (request.POST.get("client_first_name") or "").strip()
+            client_last_name = (request.POST.get("client_last_name") or "").strip()
+            if client_first_name and client_last_name:
+                Customer.objects.create(
+                    project=project,
+                    company_name=(request.POST.get("client_company_name") or "").strip(),
+                    first_name=client_first_name,
+                    last_name=client_last_name,
+                    email=(request.POST.get("client_email") or "").strip(),
+                    phone=(request.POST.get("client_phone") or "").strip(),
+                )
+            messages.success(request, "Project created.")
+            return redirect("dashboard_projects")
+
+    q = (request.GET.get("q") or "").strip()
+    client_id = (request.GET.get("client_id") or "").strip()
+
+    projects = (
+        Project.objects.annotate(
+            media_total=Count("media", distinct=True),
+            client_total=Count("customers", distinct=True),
+        )
+        .order_by("name")
+    )
+    if q:
+        projects = projects.filter(
+            Q(name__icontains=q)
+            | Q(location__icontains=q)
+            | Q(customers__company_name__icontains=q)
+            | Q(customers__first_name__icontains=q)
+            | Q(customers__last_name__icontains=q)
+        ).distinct()
+    if client_id.isdigit():
+        projects = projects.filter(customers__id=int(client_id)).distinct()
+
+    return render(
+        request,
+        "base/dashboard_projects.html",
+        {
+            "projects": projects,
+            "clients": Customer.objects.select_related("project").order_by("company_name", "last_name", "first_name"),
+            "filters": {"q": q, "client_id": client_id},
+            **_base_context(),
+        },
+    )
+
+
+def dashboard_tags(request):
+    q = (request.GET.get("q") or "").strip()
+    creator = (request.GET.get("creator") or "").strip()
+    project_id = (request.GET.get("project_id") or "").strip()
+
+    tags = Tag.objects.select_related("user").annotate(media_total=Count("media", distinct=True)).order_by("name")
+    if q:
+        tags = tags.filter(Q(name__icontains=q) | Q(media__file_name__icontains=q)).distinct()
+    if creator == "me" and request.user.is_authenticated:
+        tags = tags.filter(user=request.user)
+    elif creator == "loose":
+        tags = tags.filter(user__isnull=True)
+    if project_id.isdigit():
+        tags = tags.filter(media__project_id=int(project_id)).distinct()
+
+    return render(
+        request,
+        "base/dashboard_tags.html",
+        {
+            "tags": tags,
+            "projects": Project.objects.order_by("name"),
+            "filters": {"q": q, "creator": creator, "project_id": project_id},
+            **_base_context(),
+        },
+    )
+
+
+def dashboard_media(request):
+    q = (request.GET.get("q") or "").strip()
+    project_id = (request.GET.get("project_id") or "").strip()
+    client_id = (request.GET.get("client_id") or "").strip()
+    tag_id = (request.GET.get("tag_id") or "").strip()
+    search_state = _search_state_from_request(request)
+
+    media = (
+        Media.objects.select_related("project", "metadata", "batch")
+        .prefetch_related("tags", "project__customers")
+        .order_by("project__name", "file_name")
+    )
+
+    if q:
+        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
+        if search_state["projects"]:
+            q_filter |= Q(project__name__icontains=q) | Q(project__location__icontains=q)
+        if search_state["clients"]:
+            q_filter |= (
+                Q(project__customers__company_name__icontains=q)
+                | Q(project__customers__first_name__icontains=q)
+                | Q(project__customers__last_name__icontains=q)
+            )
+        if search_state["tags"]:
+            q_filter |= Q(tags__name__icontains=q)
+        if search_state["metadata"]:
+            q_filter |= (
+                Q(metadata__file_type__icontains=q)
+                | Q(metadata__codec__icontains=q)
+                | Q(metadata__color_space__icontains=q)
+                | Q(metadata__aspect_ratio__icontains=q)
+            )
+        media = media.filter(q_filter).distinct()
+
+    if project_id.isdigit():
+        media = media.filter(project_id=int(project_id))
+    if client_id.isdigit():
+        media = media.filter(project__customers__id=int(client_id)).distinct()
+    if tag_id.isdigit():
+        media = media.filter(tags__id=int(tag_id)).distinct()
+
+    return render(
+        request,
+        "base/dashboard_media.html",
+        {
+            "media_list": media,
+            "projects": Project.objects.order_by("name"),
+            "clients": Customer.objects.select_related("project").order_by("company_name", "last_name", "first_name"),
+            "tags": Tag.objects.order_by("name"),
+            "filters": {
+                "q": q,
+                "project_id": project_id,
+                "client_id": client_id,
+                "tag_id": tag_id,
+            },
+            **_base_context(search_state),
         },
     )
 
@@ -174,9 +462,12 @@ def dashboard_batch_assign_project(request, batch_id):
         return redirect("dashboard_batch_detail", batch_id=batch_id)
 
     batch = get_object_or_404(Batch, id=batch_id)
-
-    project_id = request.POST.get("project_id") or ""
-    new_project_name = (request.POST.get("new_project_name") or "").strip()
+    form_state = _batch_assignment_state(request.POST)
+    project_id = form_state["project_id"]
+    new_project_name = form_state["new_project_name"]
+    create_client = form_state["create_client"]
+    tag_names = form_state["tags"]
+    errors = []
 
     project = None
     if new_project_name:
@@ -184,8 +475,70 @@ def dashboard_batch_assign_project(request, batch_id):
     elif project_id.isdigit():
         project = Project.objects.filter(id=int(project_id)).first()
 
+    if not project and not tag_names:
+        errors.append("Choose an existing project or enter a new project name.")
+
+    if create_client:
+        if not new_project_name:
+            errors.append("Create a new project to add a client in the same step.")
+        if not form_state["first_name"]:
+            errors.append("Client first name is required when Create client is enabled.")
+        if not form_state["last_name"]:
+            errors.append("Client last name is required when Create client is enabled.")
+
+    if errors:
+        return _render_batch_detail(
+            request,
+            batch_id,
+            assignment_form=form_state,
+            assignment_errors=errors,
+            status_code=400,
+        )
+
+    if create_client:
+        Customer.objects.create(
+            project=project,
+            company_name=form_state["company_name"],
+            first_name=form_state["first_name"],
+            last_name=form_state["last_name"],
+            email=form_state["email"],
+            phone=form_state["phone"],
+        )
+
+    media_qs = Media.objects.filter(batch=batch)
+    updated_count = 0
     if project:
-        Media.objects.filter(batch=batch).update(project=project)
+        updated_count = media_qs.update(project=project)
+
+    tag_links_created = 0
+    claimed_tag_count = 0
+    if tag_names:
+        tags, claimed_tag_count = _resolve_tags_for_user(tag_names, request.user)
+        for media in media_qs:
+            for tag in tags:
+                _, link_created = MediaTag.objects.get_or_create(media=media, tag=tag)
+                if link_created:
+                    tag_links_created += 1
+
+    message_parts = []
+    if project:
+        message_parts.append(
+            f'Assigned {updated_count} file{"s" if updated_count != 1 else ""} in Batch #{batch.id} to "{project.name}"'
+        )
+    if tag_names:
+        message_parts.append(
+            f'added {len(tag_names)} tag{"s" if len(tag_names) != 1 else ""} ({", ".join(tag_names)})'
+        )
+    if tag_links_created:
+        message_parts.append(f"created {tag_links_created} new tag link{'s' if tag_links_created != 1 else ''}")
+    if claimed_tag_count:
+        message_parts.append(f"claimed {claimed_tag_count} loose tag{'s' if claimed_tag_count != 1 else ''} for your account")
+
+    messages.success(request, ". ".join(message_parts) + ".")
+
+    if project and not _batch_has_unassigned_media(batch.id):
+        messages.info(request, f'Batch #{batch.id} is fully assigned and has been removed from the active queue.')
+        return redirect("dashboard_home")
 
     return redirect("dashboard_batch_detail", batch_id=batch_id)
 
@@ -200,25 +553,108 @@ def _json(request):
         return {}
 
 
-def _parse_tags(raw):
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        parts = raw
+def _resolve_media_target(media_id=None, file_path=None):
+    media = None
+    target_file_path = (file_path or "").strip()
+
+    if media_id:
+        media = Media.objects.filter(id=media_id).first()
+        if media and not target_file_path:
+            target_file_path = media.file_path
+
+    if media is None and target_file_path:
+        media = Media.objects.filter(file_path=target_file_path).first()
+
+    return media, target_file_path
+
+
+def _normalize_metadata_payload(raw):
+    def to_bool(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"true", "1", "yes"}:
+                return True
+            if lowered in {"false", "0", "no"}:
+                return False
+            return None
+        return bool(value)
+
+    def to_int(value):
+        if value in (None, "", "N/A"):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def to_decimal(value):
+        if value in (None, "", "N/A"):
+            return None
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    def to_duration(value):
+        if value in (None, "", "N/A"):
+            return None
+        try:
+            seconds = float(value)
+        except (TypeError, ValueError):
+            return None
+        if seconds < 0:
+            return None
+        return timedelta(seconds=seconds)
+
+    imported_at = raw.get("imported_at")
+    if imported_at:
+        try:
+            imported_at = datetime.fromisoformat(str(imported_at))
+            if timezone.is_naive(imported_at):
+                imported_at = timezone.make_aware(imported_at, timezone.get_current_timezone())
+        except (TypeError, ValueError):
+            imported_at = timezone.now()
     else:
-        parts = str(raw).split(",")
-    cleaned = []
-    for t in parts:
-        t = (t or "").strip()
-        if t:
-            cleaned.append(t.lower())
-    seen = set()
-    out = []
-    for t in cleaned:
-        if t not in seen:
-            seen.add(t)
-            out.append(t)
-    return out
+        imported_at = timezone.now()
+
+    return {
+        "file_type": str(raw.get("file_type") or "")[:90],
+        "file_size": to_int(raw.get("file_size")),
+        "imported_at": imported_at,
+        "has_color_grade": bool(raw.get("has_color_grade", False)),
+        "hdr": to_bool(raw.get("hdr")),
+        "frame_rate": to_decimal(raw.get("frame_rate")),
+        "codec": str(raw.get("codec") or "")[:90],
+        "duration": to_duration(raw.get("duration")),
+        "width": to_int(raw.get("width")),
+        "height": to_int(raw.get("height")),
+        "aspect_ratio": str(raw.get("aspect_ratio") or "")[:90],
+        "color_space": str(raw.get("color_space") or "")[:90],
+        "bit_rate": to_int(raw.get("bit_rate")),
+    }
+
+
+def _save_media_metadata(media, metadata_defaults):
+    metadata_obj, was_created = MediaMetadata.objects.get_or_create(media=media)
+    metadata_obj.file_type = metadata_defaults["file_type"]
+    metadata_obj.file_size = metadata_defaults["file_size"]
+    metadata_obj.imported_at = metadata_defaults["imported_at"]
+    metadata_obj.has_color_grade = metadata_defaults["has_color_grade"]
+    metadata_obj.hdr = metadata_defaults["hdr"]
+    metadata_obj.frame_rate = metadata_defaults["frame_rate"]
+    metadata_obj.codec = metadata_defaults["codec"]
+    metadata_obj.duration = metadata_defaults["duration"]
+    metadata_obj.width = metadata_defaults["width"]
+    metadata_obj.height = metadata_defaults["height"]
+    metadata_obj.aspect_ratio = metadata_defaults["aspect_ratio"]
+    metadata_obj.color_space = metadata_defaults["color_space"]
+    metadata_obj.bit_rate = metadata_defaults["bit_rate"]
+    metadata_obj.save()
+    return metadata_obj, was_created
 
 
 @csrf_exempt
@@ -415,18 +851,11 @@ def api_media_metadata_probe(request):
     error_count = 0
 
     for target in targets:
-        media = None
-
         target_media_id = target.get("media_id")
-        target_file_path = (target.get("file_path") or "").strip()
-
-        if target_media_id:
-            media = Media.objects.filter(id=target_media_id).first()
-            if media and not target_file_path:
-                target_file_path = media.file_path
-
-        if media is None and target_file_path:
-            media = Media.objects.filter(file_path=target_file_path).first()
+        media, target_file_path = _resolve_media_target(
+            media_id=target_media_id,
+            file_path=target.get("file_path"),
+        )
 
         if media is None:
             missing_count += 1
@@ -456,21 +885,8 @@ def api_media_metadata_probe(request):
 
         try:
             metadata_defaults = probe_media_file(target_file_path, ffprobe_path=ffprobe_path)
-
-            metadata_obj, was_created = MediaMetadata.objects.get_or_create(media=media)
-            metadata_obj.file_type = metadata_defaults["file_type"]
-            metadata_obj.file_size = metadata_defaults["file_size"]
-            metadata_obj.imported_at = metadata_defaults["imported_at"]
-            metadata_obj.hdr = metadata_defaults["hdr"]
-            metadata_obj.frame_rate = metadata_defaults["frame_rate"]
-            metadata_obj.codec = metadata_defaults["codec"]
-            metadata_obj.duration = metadata_defaults["duration"]
-            metadata_obj.width = metadata_defaults["width"]
-            metadata_obj.height = metadata_defaults["height"]
-            metadata_obj.aspect_ratio = metadata_defaults["aspect_ratio"]
-            metadata_obj.color_space = metadata_defaults["color_space"]
-            metadata_obj.bit_rate = metadata_defaults["bit_rate"]
-            metadata_obj.save()
+            metadata_defaults["has_color_grade"] = False
+            metadata_obj, was_created = _save_media_metadata(media, metadata_defaults)
 
             if was_created:
                 created_count += 1
@@ -495,6 +911,86 @@ def api_media_metadata_probe(request):
                     "detail": str(exc),
                 }
             )
+
+    return JsonResponse(
+        {
+            "processed": processed,
+            "processed_count": len(processed),
+            "created": created_count,
+            "updated": updated_count,
+            "missing": missing_count,
+            "errors": error_count,
+        }
+    )
+
+
+@csrf_exempt
+def api_media_metadata_save(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    data = _json(request)
+    raw_items = data.get("items")
+
+    if isinstance(raw_items, list):
+        items = raw_items
+    else:
+        items = [data]
+
+    processed = []
+    created_count = 0
+    updated_count = 0
+    missing_count = 0
+    error_count = 0
+
+    for item in items:
+        media, target_file_path = _resolve_media_target(
+            media_id=item.get("media_id"),
+            file_path=item.get("file_path"),
+        )
+
+        if media is None:
+            missing_count += 1
+            processed.append(
+                {
+                    "file_path": target_file_path,
+                    "status": "missing_media",
+                    "detail": "No media record matches this path.",
+                }
+            )
+            continue
+
+        raw_metadata = item.get("metadata")
+        if not isinstance(raw_metadata, dict):
+            error_count += 1
+            processed.append(
+                {
+                    "media_id": media.id,
+                    "file_path": target_file_path or media.file_path,
+                    "status": "error",
+                    "detail": "metadata object required",
+                }
+            )
+            continue
+
+        metadata_defaults = _normalize_metadata_payload(raw_metadata)
+        metadata_obj, was_created = _save_media_metadata(media, metadata_defaults)
+
+        if was_created:
+            created_count += 1
+        else:
+            updated_count += 1
+
+        processed.append(
+            {
+                "media_id": media.id,
+                "file_path": target_file_path or media.file_path,
+                "status": "created" if was_created else "updated",
+                "file_type": metadata_obj.file_type,
+                "width": metadata_obj.width,
+                "height": metadata_obj.height,
+            }
+        )
 
     return JsonResponse(
         {

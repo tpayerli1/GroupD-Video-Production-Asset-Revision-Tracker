@@ -14,5 +14,6 @@ urlpatterns += [
     path("api/batches/<int:batch_id>/", views.api_batch_detail, name="api_batch_detail"),
     path("api/media_files/", views.api_media_files, name="api_media_files"),
     path("api/media/metadata/probe/", views.api_media_metadata_probe, name="api_media_metadata_probe"),
+    path("api/media/metadata/save/", views.api_media_metadata_save, name="api_media_metadata_save"),
     # path("api/tags/suggest/", views.api_tags_suggest, name="api_tags_suggest"),
 ]

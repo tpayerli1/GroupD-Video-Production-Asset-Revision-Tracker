@@ -247,6 +247,68 @@
       border-bottom: 1px solid rgba(148, 163, 184, 0.10);
       background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
     }
+
+    .visa-tag-shell {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .55rem;
+      min-height: 58px;
+      padding: .8rem .9rem;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(2, 6, 23, 0.85);
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .visa-tag-shell:focus-within {
+      border-color: rgba(77, 163, 255, 0.45);
+      box-shadow: 0 0 0 .2rem rgba(77, 163, 255, 0.12);
+    }
+
+    .visa-tag-list {
+      display: contents;
+    }
+
+    .visa-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      padding: .45rem .8rem;
+      border-radius: 999px;
+      border: 1px solid rgba(77, 163, 255, 0.18);
+      background: rgba(77, 163, 255, 0.12);
+      color: #dbeafe;
+      font-size: .92rem;
+      line-height: 1;
+    }
+
+    .visa-tag-chip button {
+      border: 0;
+      background: transparent;
+      color: #a7d4ff;
+      line-height: 1;
+      padding: 0;
+      font-size: 1rem;
+    }
+
+    .visa-tag-chip button:hover {
+      color: #ffffff;
+    }
+
+    .visa-tag-entry {
+      flex: 1 1 180px;
+      min-width: 140px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--visa-text);
+      padding: .2rem 0;
+    }
+
+    .visa-tag-entry::placeholder {
+      color: #7f91ad;
+    }
   </style>
 
   {% block extra_head %}{% endblock %}
@@ -414,6 +476,91 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (() => {
+      const tokenizeTags = (rawValue) =>
+        (rawValue || "")
+          .split(",")
+          .map((tag) => tag.trim().toLowerCase())
+          .filter((tag, index, list) => tag && list.indexOf(tag) === index);
+
+      const mountTagInput = (root) => {
+        const hiddenInput = root.querySelector("[data-tag-hidden-input]");
+        const entry = root.querySelector("[data-tag-entry]");
+        const list = root.querySelector("[data-tag-list]");
+
+        if (!hiddenInput || !entry || !list) return;
+
+        let tags = tokenizeTags(hiddenInput.value);
+
+        const syncHiddenInput = () => {
+          hiddenInput.value = tags.join(", ");
+        };
+
+        const render = () => {
+          list.innerHTML = "";
+
+          tags.forEach((tag) => {
+            const chip = document.createElement("span");
+            chip.className = "visa-tag-chip";
+
+            const label = document.createElement("span");
+            label.textContent = tag;
+
+            const removeBtn = document.createElement("button");
+            removeBtn.type = "button";
+            removeBtn.setAttribute("aria-label", `Remove ${tag}`);
+            removeBtn.textContent = "×";
+            removeBtn.addEventListener("click", () => {
+              tags = tags.filter((value) => value !== tag);
+              syncHiddenInput();
+              render();
+              entry.focus();
+            });
+
+            chip.append(label, removeBtn);
+            list.appendChild(chip);
+          });
+        };
+
+        const commitEntry = () => {
+          const nextTag = entry.value.trim().toLowerCase();
+          if (!nextTag) {
+            entry.value = "";
+            return;
+          }
+
+          if (!tags.includes(nextTag)) {
+            tags.push(nextTag);
+            syncHiddenInput();
+            render();
+          }
+
+          entry.value = "";
+        };
+
+        entry.addEventListener("keydown", (event) => {
+          if (["Enter", ",", "Tab"].includes(event.key) || (event.key === " " && entry.value.trim())) {
+            event.preventDefault();
+            commitEntry();
+          } else if (event.key === "Backspace" && !entry.value && tags.length) {
+            tags.pop();
+            syncHiddenInput();
+            render();
+          }
+        });
+
+        entry.addEventListener("blur", commitEntry);
+
+        syncHiddenInput();
+        render();
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll("[data-tag-input]").forEach(mountTagInput);
+      });
+    })();
+  </script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
