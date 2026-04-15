@@ -274,6 +274,7 @@
       let batchId = null;
       let lastPaths = [];
       let binaryPathsPromise = null;
+      let metadataDisplayToken = 0;
 
       const dz = document.getElementById("dropZone");
       const statusText = document.getElementById("statusText");
@@ -282,8 +283,22 @@
       const resetBatchBtn = document.getElementById("resetBatchBtn");
       const metadataLog = document.getElementById("metadataLog");
 
-      function addMetadataLog(message, tone = "neutral") {
+      function resetMetadataLog(message = "Metadata worker idle.") {
+        metadataDisplayToken += 1;
+        if (!metadataLog) return metadataDisplayToken;
+
+        metadataLog.innerHTML = `
+          <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 px-4 py-3 text-sm text-slate-400">
+            ${message}
+          </div>
+        `;
+
+        return metadataDisplayToken;
+      }
+
+      function addMetadataLog(message, tone = "neutral", token = metadataDisplayToken) {
         if (!metadataLog) return;
+        if (token !== metadataDisplayToken) return;
 
         const tones = {
           neutral: "border-slate-800/80 bg-slate-900/60 text-slate-300",
@@ -337,25 +352,27 @@
 
       async function processMetadataInBackground(paths) {
         if (!paths?.length) return;
+        const token = metadataDisplayToken;
 
-        addMetadataLog(`Metadata queue started for ${paths.length} file${paths.length === 1 ? "" : "s"}.`, "info");
+        addMetadataLog(`Metadata queue started for ${paths.length} file${paths.length === 1 ? "" : "s"}.`, "info", token);
 
         for (const filePath of paths) {
           try {
-            addMetadataLog(`Probing ${filePath}`, "neutral");
+            addMetadataLog(`Probing ${filePath}`, "neutral", token);
             const metadata = await window.uploader.probeMediaFile(filePath);
             const saveRes = await saveMediaMetadata(filePath, metadata);
             const result = saveRes?.processed?.[0];
             addMetadataLog(
               `${result?.status === "created" ? "Saved" : "Updated"} metadata for ${filePath}`,
-              "success"
+              "success",
+              token
             );
           } catch (error) {
-            addMetadataLog(`Metadata failed for ${filePath}: ${error?.message || error}`, "error");
+            addMetadataLog(`Metadata failed for ${filePath}: ${error?.message || error}`, "error", token);
           }
         }
 
-        addMetadataLog("Metadata queue finished.", "info");
+        addMetadataLog("Metadata queue finished.", "info", token);
       }
 
       ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
@@ -419,6 +436,7 @@
           const old = batchId;
           await ensureBatch({ reset: true, batch_id: old });
           lastPaths = [];
+          resetMetadataLog(`Metadata activity cleared for new batch ${batchId}.`);
           statusText.textContent = `New batch ${batchId}`;
         } catch (err) {
           statusText.textContent = `Error: ${err?.message || err}`;
@@ -427,6 +445,7 @@
 
       (async () => {
         try {
+          resetMetadataLog();
           await ensureBatch();
           await getBinaryPaths();
           statusText.textContent = `Ready | Batch ${batchId}`;

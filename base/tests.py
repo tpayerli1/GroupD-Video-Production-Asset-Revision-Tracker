@@ -297,6 +297,7 @@ class BatchLifecycleTests(TestCase):
 
 class DashboardNavigationTests(TestCase):
     def setUp(self):
+        self.user = get_user_model().objects.create_user(username="navuser", password="secret123")
         self.project = Project.objects.create(name="Lake Project", location="Chicago")
         self.client_obj = Customer.objects.create(
             project=self.project,
@@ -313,6 +314,14 @@ class DashboardNavigationTests(TestCase):
         )
         self.tag = Tag.objects.create(name="lake")
         self.media.tags.add(self.tag)
+        self.other_media = Media.objects.create(
+            batch=self.batch,
+            project=self.project,
+            file_name="warehouse-broll.mp4",
+            file_path="C:\\media\\warehouse-broll.mp4",
+        )
+        self.other_tag = Tag.objects.create(name="warehouse")
+        self.other_media.tags.add(self.other_tag)
         MediaMetadata.objects.create(media=self.media, file_type="video", codec="prores")
 
     def test_dashboard_clients_page_lists_clients(self):
@@ -364,3 +373,25 @@ class DashboardNavigationTests(TestCase):
                 last_name="Reed",
             ).exists()
         )
+
+    def test_project_detail_page_can_bulk_tag_filtered_media(self):
+        self.client.login(username="navuser", password="secret123")
+
+        response = self.client.post(
+            reverse("dashboard_project_detail", args=[self.project.id]),
+            {
+                "action": "apply_tags",
+                "q": "lake",
+                "client_id": "",
+                "tag_id": "",
+                "tags": "1",
+                "metadata": "1",
+                "bulk_tags": "favorite",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.media.refresh_from_db()
+        self.other_media.refresh_from_db()
+        self.assertIn("favorite", list(self.media.tags.values_list("name", flat=True)))
+        self.assertNotIn("favorite", list(self.other_media.tags.values_list("name", flat=True)))

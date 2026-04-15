@@ -3,6 +3,7 @@ import os
 import subprocess
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta, datetime
+from urllib.parse import urlencode
 
 from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
@@ -11,6 +12,7 @@ from django.contrib import messages
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Count, Q
+from django.urls import reverse
 
 from .models import *
 from .media_probe import probe_media_file
@@ -237,6 +239,36 @@ def _resolve_tags_for_user(tag_names, user=None):
     return tags, claimed_count
 
 
+def _project_media_queryset(project, q="", client_id="", tag_id="", search_state=None):
+    search_state = search_state or _empty_search_state()
+
+    media = (
+        project.media.select_related("metadata", "batch")
+        .prefetch_related("tags")
+        .order_by("file_name")
+    )
+
+    if q:
+        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
+        if search_state["tags"]:
+            q_filter |= Q(tags__name__icontains=q)
+        if search_state["metadata"]:
+            q_filter |= (
+                Q(metadata__file_type__icontains=q)
+                | Q(metadata__codec__icontains=q)
+                | Q(metadata__color_space__icontains=q)
+                | Q(metadata__aspect_ratio__icontains=q)
+            )
+        media = media.filter(q_filter).distinct()
+
+    if client_id.isdigit():
+        media = media.filter(project__customers__id=int(client_id)).distinct()
+    if tag_id.isdigit():
+        media = media.filter(tags__id=int(tag_id)).distinct()
+
+    return media
+
+
 def dashboard_home(request):
     batches = (
         Batch.objects
@@ -380,7 +412,60 @@ def dashboard_project_detail(request, project_id):
         id=project_id,
     )
 
+    q = (request.GET.get("q") or "").strip()
+    client_id = (request.GET.get("client_id") or "").strip()
+    tag_id = (request.GET.get("tag_id") or "").strip()
+    search_state = _search_state_from_request(request)
     if request.method == "POST":
+        action = request.POST.get("action") or "add_client"
+
+        if action == "apply_tags":
+            q = (request.POST.get("q") or "").strip()
+            client_id = (request.POST.get("client_id") or "").strip()
+            tag_id = (request.POST.get("tag_id") or "").strip()
+            search_state = {
+                "q": q,
+                "projects": False,
+                "clients": False,
+                "tags": bool(request.POST.get("tags")),
+                "metadata": bool(request.POST.get("metadata")),
+            }
+            tag_names = _parse_tags(request.POST.get("bulk_tags"))
+            media = _project_media_queryset(project, q=q, client_id=client_id, tag_id=tag_id, search_state=search_state)
+
+            if not tag_names:
+                messages.error(request, "Enter at least one tag to apply to the filtered media.")
+            else:
+                tags, claimed_tag_count = _resolve_tags_for_user(tag_names, request.user)
+                tag_links_created = 0
+                matched_count = media.count()
+                for media_item in media:
+                    for tag in tags:
+                        _, link_created = MediaTag.objects.get_or_create(media=media_item, tag=tag)
+                        if link_created:
+                            tag_links_created += 1
+
+                message = (
+                    f'Applied {len(tag_names)} tag{"s" if len(tag_names) != 1 else ""} '
+                    f"to {matched_count} filtered media file{'s' if matched_count != 1 else ''}."
+                )
+                if tag_links_created:
+                    message += f" Created {tag_links_created} new tag link{'s' if tag_links_created != 1 else ''}."
+                if claimed_tag_count:
+                    message += f" Claimed {claimed_tag_count} loose tag{'s' if claimed_tag_count != 1 else ''} for your account."
+                messages.success(request, message)
+            return_query = urlencode(
+                {
+                    "q": q,
+                    "client_id": client_id,
+                    "tag_id": tag_id,
+                    **({"tags": "1"} if search_state["tags"] else {}),
+                    **({"metadata": "1"} if search_state["metadata"] else {}),
+                }
+            )
+            target = reverse("dashboard_project_detail", args=[project.id])
+            return redirect(f"{target}?{return_query}" if return_query else target)
+
         first_name = (request.POST.get("first_name") or "").strip()
         last_name = (request.POST.get("last_name") or "").strip()
 
@@ -398,34 +483,7 @@ def dashboard_project_detail(request, project_id):
             messages.success(request, "Client added to project.")
             return redirect("dashboard_project_detail", project_id=project.id)
 
-    q = (request.GET.get("q") or "").strip()
-    client_id = (request.GET.get("client_id") or "").strip()
-    tag_id = (request.GET.get("tag_id") or "").strip()
-    search_state = _search_state_from_request(request)
-
-    media = (
-        project.media.select_related("metadata", "batch")
-        .prefetch_related("tags")
-        .order_by("file_name")
-    )
-
-    if q:
-        q_filter = Q(file_name__icontains=q) | Q(file_path__icontains=q)
-        if search_state["tags"]:
-            q_filter |= Q(tags__name__icontains=q)
-        if search_state["metadata"]:
-            q_filter |= (
-                Q(metadata__file_type__icontains=q)
-                | Q(metadata__codec__icontains=q)
-                | Q(metadata__color_space__icontains=q)
-                | Q(metadata__aspect_ratio__icontains=q)
-            )
-        media = media.filter(q_filter).distinct()
-
-    if client_id.isdigit():
-        media = media.filter(project__customers__id=int(client_id)).distinct()
-    if tag_id.isdigit():
-        media = media.filter(tags__id=int(tag_id)).distinct()
+    media = _project_media_queryset(project, q=q, client_id=client_id, tag_id=tag_id, search_state=search_state)
 
     return render(
         request,
@@ -434,6 +492,7 @@ def dashboard_project_detail(request, project_id):
             "project": project,
             "clients": project.customers.order_by("company_name", "last_name", "first_name"),
             "media_list": media,
+            "media_count": media.count(),
             "tag_options": Tag.objects.filter(media__project=project).order_by("name").distinct(),
             "filters": {"q": q, "client_id": client_id, "tag_id": tag_id},
             **_base_context(search_state),

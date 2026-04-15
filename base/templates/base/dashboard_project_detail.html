@@ -76,6 +76,43 @@
     </div>
 
     <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa mb-4">
+        <div class="content-card-header px-4 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="fw-semibold">Apply Tags To Filtered Media</div>
+            <div class="small muted">Current filters match {{ media_count }} file{{ media_count|pluralize }} in this project.</div>
+          </div>
+
+          <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">
+            {{ media_count }} match{{ media_count|pluralize }}
+          </span>
+        </div>
+
+        <div class="p-4">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="apply_tags">
+            <input type="hidden" name="q" value="{{ filters.q }}">
+            <input type="hidden" name="client_id" value="{{ filters.client_id }}">
+            <input type="hidden" name="tag_id" value="{{ filters.tag_id }}">
+            {% if search_state.tags %}
+              <input type="hidden" name="tags" value="1">
+            {% endif %}
+            {% if search_state.metadata %}
+              <input type="hidden" name="metadata" value="1">
+            {% endif %}
+
+            {% include "base/partials/tag_input.html" with hidden_input_name="bulk_tags" hidden_input_value="" placeholder="Type tags and press space" help_text="These tags will be applied only to the media currently shown below." %}
+
+            <div class="d-flex justify-content-end mt-3">
+              <button class="btn btn-outline-visa px-4">
+                Apply Tags To Current Results
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <div class="visa-glass-soft card-visa">
         <div class="content-card-header px-4 py-3">
           <form method="get" class="row g-3 align-items-end">
