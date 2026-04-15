@@ -16,7 +16,7 @@
       <form method="get" class="row g-3 align-items-end">
         <div class="col-12 col-xl-4">
           <label class="form-label muted small text-uppercase">Search</label>
-          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Lake mp4 prores shoreline">
+          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="jpg mp4 lake">
         </div>
         <div class="col-12 col-md-4 col-xl-2">
           <label class="form-label muted small text-uppercase">Project</label>
@@ -70,6 +70,7 @@
               <span>Metadata</span>
             </label>
           </div>
+          <div class="small muted mt-3">Space-separated terms are treated as separate filters, so `jpg mp4 lake` widens the result set instead of narrowing it.</div>
         </div>
       </form>
     </div>

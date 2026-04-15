@@ -22,11 +22,39 @@ from django.db.models import Prefetch
 
 
 SEARCH_SCOPES = ("projects", "tags", "clients", "metadata")
+MEDIA_EXTENSION_ALIASES = {
+    "jpg": ("jpg", "jpeg"),
+    "jpeg": ("jpg", "jpeg"),
+    "tif": ("tif", "tiff"),
+    "tiff": ("tif", "tiff"),
+}
+MEDIA_TYPE_BY_EXTENSION = {
+    "jpg": "image",
+    "jpeg": "image",
+    "png": "image",
+    "gif": "image",
+    "bmp": "image",
+    "webp": "image",
+    "heic": "image",
+    "tif": "image",
+    "tiff": "image",
+    "mp4": "video",
+    "mov": "video",
+    "mkv": "video",
+    "avi": "video",
+    "m4v": "video",
+    "wmv": "video",
+    "mp3": "audio",
+    "wav": "audio",
+    "aac": "audio",
+    "flac": "audio",
+}
 
 
 def _empty_search_state():
     return {
         "q": "",
+        "terms": [],
         "projects": True,
         "tags": True,
         "clients": True,
@@ -35,7 +63,32 @@ def _empty_search_state():
 
 
 def _search_terms(query):
-    return [term for term in (query or "").split() if term]
+    cleaned = []
+    seen = set()
+    for raw_term in (query or "").split():
+        term = raw_term.strip().lower().lstrip(".")
+        if term and term not in seen:
+            seen.add(term)
+            cleaned.append(term)
+    return cleaned
+
+
+def _search_term_variants(term):
+    return MEDIA_EXTENSION_ALIASES.get(term, (term,))
+
+
+def _metadata_type_for_term(term):
+    return MEDIA_TYPE_BY_EXTENSION.get(term, "")
+
+
+def _file_term_query(term, *fields):
+    variants = _search_term_variants(term)
+    query = Q()
+    for variant in variants:
+        for field in fields:
+            query |= Q(**{f"{field}__icontains": variant})
+            query |= Q(**{f"{field}__iendswith": f".{variant}"})
+    return query
 
 
 def _any_term_query(terms, builder):
@@ -88,6 +141,7 @@ def _search_state_from_request(request):
     source = request.POST if request.method == "POST" else request.GET
 
     query = (source.get("q") or "").strip()
+    terms = _search_terms(query)
     selected = {
         scope: bool(source.get(scope))
         for scope in SEARCH_SCOPES
@@ -96,7 +150,7 @@ def _search_state_from_request(request):
     if not any(selected.values()):
         selected = {scope: True for scope in SEARCH_SCOPES}
 
-    return {"q": query, **selected}
+    return {"q": query, "terms": terms, **selected}
 
 
 def _base_context(search_state=None):
@@ -129,8 +183,7 @@ def _search_dashboard(query, search_state):
                         Q(customers__company_name__icontains=term) |
                         Q(customers__first_name__icontains=term) |
                         Q(customers__last_name__icontains=term) |
-                        Q(media__file_name__icontains=term) |
-                        Q(media__file_path__icontains=term)
+                        _file_term_query(term, "media__file_name", "media__file_path")
                     ),
                 )
             )
@@ -149,8 +202,7 @@ def _search_dashboard(query, search_state):
                     terms,
                     lambda term: (
                         Q(name__icontains=term) |
-                        Q(media__file_name__icontains=term) |
-                        Q(media__file_path__icontains=term)
+                        _file_term_query(term, "media__file_name", "media__file_path")
                     ),
                 )
             )
@@ -186,11 +238,11 @@ def _search_dashboard(query, search_state):
                 _any_term_query(
                     terms,
                     lambda term: (
-                        Q(file_name__icontains=term) |
-                        Q(file_path__icontains=term) |
+                        _file_term_query(term, "file_name", "file_path") |
                         Q(project__name__icontains=term) |
                         Q(tags__name__icontains=term) |
                         Q(metadata__file_type__icontains=term) |
+                        (Q(metadata__file_type__iexact=_metadata_type_for_term(term)) if _metadata_type_for_term(term) else Q()) |
                         Q(metadata__codec__icontains=term) |
                         Q(metadata__color_space__icontains=term) |
                         Q(metadata__aspect_ratio__icontains=term)
@@ -305,11 +357,11 @@ def _project_media_queryset(project, q="", client_id="", tag_id="", search_state
             _any_term_query(
                 terms,
                 lambda term: (
-                    Q(file_name__icontains=term) |
-                    Q(file_path__icontains=term) |
+                    _file_term_query(term, "file_name", "file_path") |
                     (Q(tags__name__icontains=term) if search_state["tags"] else Q()) |
                     (
                         Q(metadata__file_type__icontains=term)
+                        | (Q(metadata__file_type__iexact=_metadata_type_for_term(term)) if _metadata_type_for_term(term) else Q())
                         | Q(metadata__codec__icontains=term)
                         | Q(metadata__color_space__icontains=term)
                         | Q(metadata__aspect_ratio__icontains=term)
@@ -654,7 +706,7 @@ def dashboard_tags(request):
         tags = tags.filter(
             _any_term_query(
                 terms,
-                lambda term: Q(name__icontains=term) | Q(media__file_name__icontains=term),
+                lambda term: Q(name__icontains=term) | _file_term_query(term, "media__file_name", "media__file_path"),
             )
         ).distinct()
     if creator == "me" and request.user.is_authenticated:
@@ -716,8 +768,7 @@ def dashboard_media(request):
             _any_term_query(
                 terms,
                 lambda term: (
-                    Q(file_name__icontains=term)
-                    | Q(file_path__icontains=term)
+                    _file_term_query(term, "file_name", "file_path")
                     | ((Q(project__name__icontains=term) | Q(project__location__icontains=term)) if search_state["projects"] else Q())
                     | (
                         (
@@ -730,6 +781,7 @@ def dashboard_media(request):
                     | (
                         (
                             Q(metadata__file_type__icontains=term)
+                            | (Q(metadata__file_type__iexact=_metadata_type_for_term(term)) if _metadata_type_for_term(term) else Q())
                             | Q(metadata__codec__icontains=term)
                             | Q(metadata__color_space__icontains=term)
                             | Q(metadata__aspect_ratio__icontains=term)

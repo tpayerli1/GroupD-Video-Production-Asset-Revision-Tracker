@@ -89,6 +89,24 @@ class DashboardSearchTests(TestCase):
 
         self.assertEqual({item.id for item in media_list}, {self.media.id, other_media.id})
 
+    def test_media_search_normalizes_dotted_extensions(self):
+        other_media = Media.objects.create(
+            batch=self.batch,
+            project=self.project,
+            file_name="behind-scenes.jpg",
+            file_path="C:\\media\\behind-scenes.jpg",
+        )
+
+        response = self.client.get(
+            reverse("dashboard_media"),
+            {"q": ".jpg .mp4", "projects": "1", "clients": "1", "tags": "1", "metadata": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        media_list = list(response.context["media_list"])
+
+        self.assertEqual({item.id for item in media_list}, {self.media.id, other_media.id})
+
 
 class MediaMetadataProbeApiTests(TestCase):
     def setUp(self):

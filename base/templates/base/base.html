@@ -333,6 +333,18 @@
     .visa-tag-entry::placeholder {
       color: #7f91ad;
     }
+
+    .search-term-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: .35rem .7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(77, 163, 255, 0.18);
+      background: rgba(77, 163, 255, 0.10);
+      color: #dbeafe;
+      font-size: .84rem;
+      letter-spacing: .02em;
+    }
   </style>
 
   {% block extra_head %}{% endblock %}
@@ -376,6 +388,14 @@
                 </div>
               </div>
 
+              {% if search_state.terms %}
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  {% for term in search_state.terms %}
+                    <span class="search-term-chip">{{ term }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
               <div class="d-flex flex-wrap gap-2 mt-3">
                 <label class="filter-chip">
                   <input
@@ -416,6 +436,10 @@
                   >
                   <span>Metadata</span>
                 </label>
+              </div>
+
+              <div class="small muted mt-3">
+                Search splits on spaces. `jpg mp4 lake` means show items matching any of those terms.
               </div>
             </form>
           </div>
