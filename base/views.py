@@ -270,6 +270,26 @@ def _resolve_tags_for_user(tag_names, user=None):
     return tags, claimed_count
 
 
+def _adopt_loose_tag_for_user(tag, user):
+    if tag.user_id is not None:
+        return tag, False, 0
+
+    existing_tag = Tag.objects.filter(user=user, name=tag.name).first()
+    moved_links = 0
+
+    if existing_tag:
+        for media_id in tag.mediatag_set.values_list("media_id", flat=True):
+            _, created = MediaTag.objects.get_or_create(media_id=media_id, tag=existing_tag)
+            if created:
+                moved_links += 1
+        tag.delete()
+        return existing_tag, True, moved_links
+
+    tag.user = user
+    tag.save(update_fields=["user"])
+    return tag, True, tag.media.count()
+
+
 def _project_media_queryset(project, q="", client_id="", tag_id="", search_state=None):
     search_state = search_state or _empty_search_state()
     terms = _search_terms(q)
@@ -581,6 +601,29 @@ def dashboard_client_detail(request, client_id):
 
 def dashboard_tags(request):
     if request.method == "POST":
+        action = request.POST.get("action") or "create_tags"
+
+        if action == "adopt_tag":
+            if not request.user.is_authenticated:
+                messages.error(request, "Sign in before adopting loose tags.")
+                return redirect("dashboard_tags")
+
+            tag_id = request.POST.get("tag_id") or ""
+            loose_tag = Tag.objects.filter(id=tag_id, user__isnull=True).first()
+            if loose_tag is None:
+                messages.error(request, "That loose tag is no longer available.")
+                return redirect("dashboard_tags")
+
+            adopted_tag, adopted, moved_links = _adopt_loose_tag_for_user(loose_tag, request.user)
+            if not adopted:
+                messages.error(request, "That tag could not be adopted.")
+            else:
+                message = f'Adopted "{adopted_tag.name}" for your account.'
+                if moved_links:
+                    message += f" Preserved {moved_links} media link{'s' if moved_links != 1 else ''}."
+                messages.success(request, message)
+            return redirect("dashboard_tags")
+
         tag_names = _parse_tags(request.POST.get("tags"))
         if not tag_names:
             messages.error(request, "Enter at least one tag to create.")

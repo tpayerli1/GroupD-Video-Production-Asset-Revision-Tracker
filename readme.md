@@ -311,6 +311,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-visa.ps1
 
 `start-django.ps1` runs Django with the local `.venv`, `start-electron.ps1` launches the uploader, and `start-visa.ps1` opens both in separate PowerShell windows.
 
+If you want the simplest student demo flow on Windows, double-click or run:
+
+```cmd
+start-demo.cmd
+```
+
+That opens two `cmd` windows:
+- one runs `poetry run python manage.py runserver`
+- one runs `npm start` inside `electron_app`
+
 ---
 
 # 🔗 Electron ↔ Django Requirements

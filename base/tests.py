@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Batch, Customer, Media, MediaMetadata, Project, Tag
+from .models import Batch, Customer, Media, MediaMetadata, MediaTag, Project, Tag
 
 
 class DashboardSearchTests(TestCase):
@@ -467,3 +467,32 @@ class DashboardNavigationTests(TestCase):
         self.assertContains(response, f'{reverse("dashboard_media")}?tag_id={self.tag.id}')
         self.assertContains(response, reverse("dashboard_project_detail", args=[self.project.id]))
         self.assertContains(response, reverse("dashboard_client_detail", args=[self.client_obj.id]))
+
+    def test_tags_page_can_adopt_loose_tag(self):
+        self.client.login(username="navuser", password="secret123")
+        loose_tag = Tag.objects.create(name="adopt-me")
+        self.media.tags.add(loose_tag)
+
+        response = self.client.post(
+            reverse("dashboard_tags"),
+            {"action": "adopt_tag", "tag_id": str(loose_tag.id)},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        loose_tag.refresh_from_db()
+        self.assertEqual(loose_tag.user, self.user)
+
+    def test_tags_page_merges_loose_tag_into_existing_user_tag(self):
+        self.client.login(username="navuser", password="secret123")
+        existing_tag = Tag.objects.create(user=self.user, name="merge-me")
+        loose_tag = Tag.objects.create(name="merge-me")
+        self.other_media.tags.add(loose_tag)
+
+        response = self.client.post(
+            reverse("dashboard_tags"),
+            {"action": "adopt_tag", "tag_id": str(loose_tag.id)},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Tag.objects.filter(id=loose_tag.id).exists())
+        self.assertTrue(MediaTag.objects.filter(media=self.other_media, tag=existing_tag).exists())

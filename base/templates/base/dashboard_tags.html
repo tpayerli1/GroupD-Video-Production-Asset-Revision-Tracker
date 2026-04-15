@@ -84,7 +84,19 @@
                     <div class="fw-semibold text-light">{{ tag.name }}</div>
                     <div class="small muted">Used across {{ tag.project_total }} project{{ tag.project_total|pluralize }} and {{ tag.client_total }} client{{ tag.client_total|pluralize }}</div>
                   </td>
-                  <td>{% if tag.user %}{{ tag.user.username }}{% else %}<span class="muted">Loose / Electron</span>{% endif %}</td>
+                  <td>
+                    {% if tag.user %}
+                      {{ tag.user.username }}
+                    {% else %}
+                      <div class="muted mb-2">Loose / Electron</div>
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="adopt_tag">
+                        <input type="hidden" name="tag_id" value="{{ tag.id }}">
+                        <button class="btn btn-sm btn-outline-visa">Adopt Tag</button>
+                      </form>
+                    {% endif %}
+                  </td>
                   <td>
                     <a href="{% url 'dashboard_media' %}?tag_id={{ tag.id }}" class="text-decoration-none text-reset">
                       <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.media_total }} media</span>
