@@ -316,8 +316,11 @@ def api_media_files(request):
         if not p:
             continue
 
-        p = str(p)[:256]
-        file_name = os.path.basename(p.rstrip("\\/"))[:90]
+        p = str(p).strip()[:512]
+        file_name = os.path.basename(p.rstrip("\\/"))[:255]
+
+        if not p:
+            continue
 
         print("→ Processing:", p)
 

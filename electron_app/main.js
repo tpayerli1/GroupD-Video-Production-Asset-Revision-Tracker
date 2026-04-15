@@ -1,5 +1,12 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
+const ffmpegPath = require("ffmpeg-static");
+const ffprobe = require("ffprobe-static");
+
+ipcMain.handle("uploader:get-binary-paths", () => ({
+  ffmpegPath: ffmpegPath || null,
+  ffprobePath: ffprobe?.path || null,
+}));
 
 function createWindow() {
   const win = new BrowserWindow({

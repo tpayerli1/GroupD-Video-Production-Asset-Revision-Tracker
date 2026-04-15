@@ -1,6 +1,4 @@
-const { contextBridge } = require("electron");
-const ffmpegPath = require("ffmpeg-static");
-const ffprobe = require("ffprobe-static");
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("uploader", {
   post: async (url, payload) => {
@@ -25,8 +23,5 @@ contextBridge.exposeInMainWorld("uploader", {
 
     return data;
   },
-  getBinaryPaths: () => ({
-    ffmpegPath: ffmpegPath || null,
-    ffprobePath: ffprobe.path || null,
-  }),
+  getBinaryPaths: () => ipcRenderer.invoke("uploader:get-binary-paths"),
 });
