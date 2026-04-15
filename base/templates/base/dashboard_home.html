@@ -17,8 +17,147 @@
     </div>
   </div>
 
+  {% if search_state.q %}
+    <div class="visa-glass-soft card-visa mb-4">
+      <div class="content-card-header px-4 py-3 d-flex justify-content-between align-items-center gap-3">
+        <div>
+          <div class="fw-semibold">Search results</div>
+          <div class="small muted">
+            {{ search_results.total }} match{{ search_results.total|pluralize }} for
+            <span class="text-light">"{{ search_state.q }}"</span>
+          </div>
+        </div>
 
-          ?search=test&project=ben
+        <span class="badge text-bg-dark border border-secondary-subtle">Above recent batches</span>
+      </div>
+
+      <div class="p-4">
+        {% if search_results.total %}
+          <div class="row g-4">
+            {% if search_results.projects %}
+              <div class="col-12 col-xl-6">
+                <div class="rounded-4 border border-secondary-subtle bg-dark-subtle bg-opacity-10 p-3 h-100">
+                  <div class="fw-semibold mb-3">Projects</div>
+                  <div class="d-grid gap-2">
+                    {% for project in search_results.projects %}
+                      <div class="rounded-3 border border-secondary-subtle p-3">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                          <div>
+                            <div class="fw-semibold text-light">{{ project.name }}</div>
+                            <div class="small muted">{{ project.location|default:"No location saved" }}</div>
+                          </div>
+                          <span class="badge rounded-pill text-bg-dark border border-info-subtle">
+                            {{ project.media_total }} media
+                          </span>
+                        </div>
+                        <div class="small muted mt-2">{{ project.client_total }} client{{ project.client_total|pluralize }}</div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {% if search_results.clients %}
+              <div class="col-12 col-xl-6">
+                <div class="rounded-4 border border-secondary-subtle bg-dark-subtle bg-opacity-10 p-3 h-100">
+                  <div class="fw-semibold mb-3">Clients</div>
+                  <div class="d-grid gap-2">
+                    {% for client in search_results.clients %}
+                      <div class="rounded-3 border border-secondary-subtle p-3">
+                        <div class="fw-semibold text-light">
+                          {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                        </div>
+                        <div class="small muted">{{ client.first_name }} {{ client.last_name }}</div>
+                        <div class="small muted mt-2">
+                          {{ client.project.name }}
+                          {% if client.email %}| {{ client.email }}{% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {% if search_results.tags %}
+              <div class="col-12 col-xl-4">
+                <div class="rounded-4 border border-secondary-subtle bg-dark-subtle bg-opacity-10 p-3 h-100">
+                  <div class="fw-semibold mb-3">Tags</div>
+                  <div class="d-flex flex-wrap gap-2">
+                    {% for tag in search_results.tags %}
+                      <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">
+                        {{ tag.name }} | {{ tag.media_total }}
+                      </span>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {% if search_results.metadata %}
+              <div class="col-12 {% if search_results.tags %}col-xl-8{% else %}col-xl-12{% endif %}">
+                <div class="rounded-4 border border-secondary-subtle bg-dark-subtle bg-opacity-10 p-3 h-100">
+                  <div class="fw-semibold mb-3">Metadata / media</div>
+                  <div class="table-responsive">
+                    <table class="table table-visa table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>File</th>
+                          <th>Type</th>
+                          <th>Project</th>
+                          <th>Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for media in search_results.metadata %}
+                          <tr>
+                            <td>
+                              <div class="fw-semibold text-light">{{ media.file_name }}</div>
+                              <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">
+                                {{ media.file_path }}
+                              </div>
+                            </td>
+                            <td>
+                              {% if media.metadata_record %}
+                                <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">
+                                  {{ media.metadata_record.file_type|default:"unknown" }}
+                                </span>
+                              {% else %}
+                                <span class="muted">No metadata</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if media.project %}
+                                {{ media.project.name }}
+                              {% else %}
+                                <span class="muted">Unassigned</span>
+                              {% endif %}
+                            </td>
+                            <td class="small muted">
+                              {% if media.metadata_record %}
+                                {{ media.metadata_record.codec|default:"Codec unknown" }}
+                                {% if media.metadata_record.resolution %}| {{ media.metadata_record.resolution }}{% endif %}
+                                {% if media.metadata_record.duration %}| {{ media.metadata_record.duration }}{% endif %}
+                              {% else %}
+                                Search matched file path, name, tag, or project.
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="muted">No matches found in the selected search areas.</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 
   <div class="visa-glass-soft card-visa">
     <div class="content-card-header px-4 py-3 d-flex justify-content-between align-items-center">

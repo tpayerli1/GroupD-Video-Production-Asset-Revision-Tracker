@@ -1,16 +1,129 @@
 import json
 import os
+import subprocess
+
 from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Count
+from django.db.models import Count, Q
 
 from .models import *
+from .media_probe import probe_media_file
 
 #import prefetch_related, annotate, Count
 from django.db.models import Prefetch
+
+
+SEARCH_SCOPES = ("projects", "tags", "clients", "metadata")
+
+
+def _empty_search_state():
+    return {
+        "q": "",
+        "projects": True,
+        "tags": True,
+        "clients": True,
+        "metadata": True,
+    }
+
+
+def _search_state_from_request(request):
+    source = request.POST if request.method == "POST" else request.GET
+
+    query = (source.get("q") or "").strip()
+    selected = {
+        scope: bool(source.get(scope))
+        for scope in SEARCH_SCOPES
+    }
+
+    if not any(selected.values()):
+        selected = {scope: True for scope in SEARCH_SCOPES}
+
+    return {"q": query, **selected}
+
+
+def _search_dashboard(query, search_state):
+    results = {
+        "projects": [],
+        "tags": [],
+        "clients": [],
+        "metadata": [],
+        "total": 0,
+    }
+
+    if not query:
+        return results
+
+    if search_state["projects"]:
+        results["projects"] = list(
+            Project.objects.filter(
+                Q(name__icontains=query) |
+                Q(location__icontains=query) |
+                Q(customers__company_name__icontains=query) |
+                Q(customers__first_name__icontains=query) |
+                Q(customers__last_name__icontains=query) |
+                Q(media__file_name__icontains=query) |
+                Q(media__file_path__icontains=query)
+            )
+            .annotate(
+                media_total=Count("media", distinct=True),
+                client_total=Count("customers", distinct=True),
+            )
+            .order_by("name")
+            .distinct()
+        )
+
+    if search_state["tags"]:
+        results["tags"] = list(
+            Tag.objects.filter(
+                Q(name__icontains=query) |
+                Q(media__file_name__icontains=query) |
+                Q(media__file_path__icontains=query)
+            )
+            .annotate(media_total=Count("media", distinct=True))
+            .order_by("name")
+            .distinct()
+        )
+
+    if search_state["clients"]:
+        results["clients"] = list(
+            Customer.objects.select_related("project")
+            .filter(
+                Q(company_name__icontains=query) |
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(email__icontains=query) |
+                Q(phone__icontains=query) |
+                Q(project__name__icontains=query)
+            )
+            .order_by("company_name", "last_name", "first_name")
+            .distinct()
+        )
+
+    if search_state["metadata"]:
+        results["metadata"] = list(
+            Media.objects.select_related("project", "metadata")
+            .prefetch_related("tags")
+            .filter(
+                Q(file_name__icontains=query) |
+                Q(file_path__icontains=query) |
+                Q(project__name__icontains=query) |
+                Q(tags__name__icontains=query) |
+                Q(metadata__file_type__icontains=query) |
+                Q(metadata__codec__icontains=query) |
+                Q(metadata__color_space__icontains=query) |
+                Q(metadata__aspect_ratio__icontains=query)
+            )
+            .order_by("-created_at")
+            .distinct()
+        )
+        for media in results["metadata"]:
+            media.metadata_record = getattr(media, "metadata", None)
+
+    results["total"] = sum(len(results[scope]) for scope in SEARCH_SCOPES)
+    return results
 
 
 def dashboard_home(request):
@@ -22,7 +135,8 @@ def dashboard_home(request):
     )
     Batch.objects.filter(id__in=empty_batch_ids).delete()
 
-
+    search_state = _search_state_from_request(request)
+    search_results = _search_dashboard(search_state["q"], search_state)
 
     batches = (
         Batch.objects
@@ -30,7 +144,15 @@ def dashboard_home(request):
         .order_by("-created_at")
     )
 
-    return render(request, "base/dashboard_home.html", {"batches": batches})
+    return render(
+        request,
+        "base/dashboard_home.html",
+        {
+            "batches": batches,
+            "search_state": search_state,
+            "search_results": search_results,
+        },
+    )
 
 def dashboard_batch_detail(request, batch_id):
     batch = get_object_or_404(Batch.objects.annotate(media_count=Count("media")), id=batch_id)
@@ -39,7 +161,12 @@ def dashboard_batch_detail(request, batch_id):
     return render(
         request,
         "base/dashboard_batch_detail.html",
-        {"batch": batch, "media": media, "projects": projects},
+        {
+            "batch": batch,
+            "media": media,
+            "projects": projects,
+            "search_state": _empty_search_state(),
+        },
     )
 
 def dashboard_batch_assign_project(request, batch_id):
@@ -247,5 +374,132 @@ def api_media_files(request):
             "updated": updated_count,
             "tag_links_created": tag_links_created,
             "tags": tag_names,
+        }
+    )
+
+
+@csrf_exempt
+def api_media_metadata_probe(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    data = _json(request)
+
+    targets = []
+
+    paths = data.get("paths")
+    if isinstance(paths, list):
+        for path in paths:
+            if path:
+                targets.append({"file_path": str(path)})
+
+    media_id = data.get("media_id")
+    file_path = data.get("file_path")
+
+    if media_id:
+        targets.append({"media_id": media_id, "file_path": file_path})
+    elif file_path:
+        targets.append({"file_path": str(file_path)})
+
+    if not targets:
+        return JsonResponse({"detail": "file_path, paths, or media_id required"}, status=400)
+
+    ffprobe_path = data.get("ffprobe_path")
+    processed = []
+    created_count = 0
+    updated_count = 0
+    missing_count = 0
+    error_count = 0
+
+    for target in targets:
+        media = None
+
+        target_media_id = target.get("media_id")
+        target_file_path = (target.get("file_path") or "").strip()
+
+        if target_media_id:
+            media = Media.objects.filter(id=target_media_id).first()
+            if media and not target_file_path:
+                target_file_path = media.file_path
+
+        if media is None and target_file_path:
+            media = Media.objects.filter(file_path=target_file_path).first()
+
+        if media is None:
+            missing_count += 1
+            processed.append(
+                {
+                    "file_path": target_file_path,
+                    "status": "missing_media",
+                    "detail": "No media record matches this path.",
+                }
+            )
+            continue
+
+        if not target_file_path:
+            target_file_path = media.file_path
+
+        if not os.path.exists(target_file_path):
+            missing_count += 1
+            processed.append(
+                {
+                    "media_id": media.id,
+                    "file_path": target_file_path,
+                    "status": "missing_file",
+                    "detail": "The file does not exist on disk.",
+                }
+            )
+            continue
+
+        try:
+            metadata_defaults = probe_media_file(target_file_path, ffprobe_path=ffprobe_path)
+
+            metadata_obj, was_created = MediaMetadata.objects.get_or_create(media=media)
+            metadata_obj.file_type = metadata_defaults["file_type"]
+            metadata_obj.file_size = metadata_defaults["file_size"]
+            metadata_obj.imported_at = metadata_defaults["imported_at"]
+            metadata_obj.hdr = metadata_defaults["hdr"]
+            metadata_obj.frame_rate = metadata_defaults["frame_rate"]
+            metadata_obj.codec = metadata_defaults["codec"]
+            metadata_obj.duration = metadata_defaults["duration"]
+            metadata_obj.width = metadata_defaults["width"]
+            metadata_obj.height = metadata_defaults["height"]
+            metadata_obj.aspect_ratio = metadata_defaults["aspect_ratio"]
+            metadata_obj.color_space = metadata_defaults["color_space"]
+            metadata_obj.bit_rate = metadata_defaults["bit_rate"]
+            metadata_obj.save()
+
+            if was_created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+            processed.append(
+                {
+                    "media_id": media.id,
+                    "file_path": target_file_path,
+                    "status": "created" if was_created else "updated",
+                    "file_type": metadata_obj.file_type,
+                }
+            )
+        except (FileNotFoundError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
+            error_count += 1
+            processed.append(
+                {
+                    "media_id": media.id,
+                    "file_path": target_file_path,
+                    "status": "error",
+                    "detail": str(exc),
+                }
+            )
+
+    return JsonResponse(
+        {
+            "processed": processed,
+            "processed_count": len(processed),
+            "created": created_count,
+            "updated": updated_count,
+            "missing": missing_count,
+            "errors": error_count,
         }
     )

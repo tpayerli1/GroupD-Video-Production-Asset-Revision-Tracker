@@ -271,7 +271,8 @@
           </div>
 
           <div class="visa-glass rounded-4 p-3 p-md-4">
-            <form method="get" action="" class="search-wrap">
+            <form method="post" action="{% url 'dashboard_home' %}" class="search-wrap">
+              {% csrf_token %}
               <div class="row g-3 align-items-center">
                 <div class="col-12 col-lg">
                   <input
@@ -279,7 +280,7 @@
                     name="q"
                     class="form-control search-input"
                     placeholder="Search across the dashboard..."
-                    value="{{ request.GET.q }}"
+                    value="{{ search_state.q|default:'' }}"
                   >
                 </div>
 
@@ -296,7 +297,7 @@
                     type="checkbox"
                     name="projects"
                     value="1"
-                    {% if request.GET.projects %}checked{% endif %}
+                    {% if search_state.projects %}checked{% endif %}
                   >
                   <span>Projects</span>
                 </label>
@@ -306,7 +307,7 @@
                     type="checkbox"
                     name="tags"
                     value="1"
-                    {% if request.GET.tags %}checked{% endif %}
+                    {% if search_state.tags %}checked{% endif %}
                   >
                   <span>Tags</span>
                 </label>
@@ -316,9 +317,19 @@
                     type="checkbox"
                     name="clients"
                     value="1"
-                    {% if request.GET.clients %}checked{% endif %}
+                    {% if search_state.clients %}checked{% endif %}
                   >
                   <span>Clients</span>
+                </label>
+
+                <label class="filter-chip">
+                  <input
+                    type="checkbox"
+                    name="metadata"
+                    value="1"
+                    {% if search_state.metadata %}checked{% endif %}
+                  >
+                  <span>Metadata</span>
                 </label>
               </div>
             </form>

@@ -22,7 +22,6 @@
   </head>
 
   <body class="min-h-screen bg-[#060b14] text-slate-100 antialiased overflow-hidden">
-    <!-- background -->
     <div class="pointer-events-none fixed inset-0">
       <div
         class="absolute inset-0"
@@ -62,7 +61,6 @@
 
     <main class="relative flex min-h-screen items-center justify-center p-6 md:p-10">
       <div class="w-full max-w-3xl">
-        <!-- top brand strip -->
         <div class="mb-5 flex items-center justify-between px-1">
           <div>
             <div class="text-[11px] font-semibold uppercase tracking-[0.28em] text-sky-300/80">
@@ -82,7 +80,6 @@
 
         <div class="rounded-[28px] border border-slate-800/80 bg-slate-950/55 p-3 shadow-soft ring-1 ring-white/5 backdrop-blur-xl">
           <div class="grid gap-3">
-            <!-- tag card -->
             <section
               class="rounded-2xl border border-slate-800/80 bg-gradient-to-b from-slate-900/70 to-slate-950/70 shadow-glow"
             >
@@ -124,13 +121,12 @@
                     type="button"
                     class="rounded-2xl border border-sky-300/20 bg-gradient-to-r from-sky-400 to-blue-500 px-5 py-3.5 text-sm font-semibold text-slate-950 shadow-[0_8px_30px_rgba(59,130,246,.35)] transition hover:brightness-110 active:scale-[0.99]"
                   >
-                    Add tags to media →
+                    Add tags to media ->
                   </button>
                 </div>
               </div>
             </section>
 
-            <!-- drop zone -->
             <section
               id="dropZone"
               class="
@@ -217,7 +213,6 @@
               </div>
             </section>
 
-            <!-- footer actions -->
             <div class="flex items-center justify-center pt-1">
               <button
                 id="resetBatchBtn"
@@ -253,6 +248,7 @@
 
       let batchId = null;
       let lastPaths = [];
+      let binaryPathsPromise = null;
 
       const dz = document.getElementById("dropZone");
       const statusText = document.getElementById("statusText");
@@ -266,6 +262,13 @@
         return batchId;
       }
 
+      async function getBinaryPaths() {
+        if (!binaryPathsPromise) {
+          binaryPathsPromise = Promise.resolve(window.uploader.getBinaryPaths?.() || {});
+        }
+        return binaryPathsPromise;
+      }
+
       function getTagsValue() {
         return (tagsInput?.value || "").trim();
       }
@@ -275,6 +278,13 @@
         const payload = { batch_id: batchId, paths: paths || [] };
         if (tags) payload.tags = tags;
         return window.uploader.post(`${API_BASE}/api/media_files/`, payload);
+      }
+
+      async function probeMediaMetadata(paths) {
+        const { ffprobePath } = await getBinaryPaths();
+        const payload = { paths: paths || [] };
+        if (ffprobePath) payload.ffprobe_path = ffprobePath;
+        return window.uploader.post(`${API_BASE}/api/media/metadata/probe/`, payload);
       }
 
       ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
@@ -294,12 +304,25 @@
         const files = [...(e.dataTransfer?.files || [])];
         const paths = files.map((f) => f.path).filter(Boolean);
 
+        if (!paths.length) {
+          statusText.textContent = "No local file paths found in that drop.";
+          return;
+        }
+
         lastPaths = paths;
 
         try {
-          statusText.textContent = `Sending ${paths.length}…`;
+          statusText.textContent = `Sending ${paths.length}...`;
           const res = await sendMedia(paths);
-          statusText.textContent = `Batch ${batchId} • +${res.created} new • ${res.updated} existing`;
+
+          try {
+            statusText.textContent = `Batch ${batchId} | probing metadata...`;
+            const probeRes = await probeMediaMetadata(paths);
+            const completedMetadata = (probeRes.created || 0) + (probeRes.updated || 0);
+            statusText.textContent = `Batch ${batchId} | +${res.created} new | ${res.updated} existing | metadata ${completedMetadata}/${probeRes.processed_count}`;
+          } catch (probeErr) {
+            statusText.textContent = `Batch ${batchId} | ingest saved, metadata probe failed: ${probeErr?.message || probeErr}`;
+          }
         } catch (err) {
           statusText.textContent = `Error: ${err?.message || err}`;
         }
@@ -317,9 +340,9 @@
         }
 
         try {
-          statusText.textContent = "Adding tags…";
+          statusText.textContent = "Adding tags...";
           const res = await sendMedia(lastPaths, tags);
-          statusText.textContent = `Tagged ${lastPaths.length} • Links +${res.tag_links_created ?? 0}`;
+          statusText.textContent = `Tagged ${lastPaths.length} | Links +${res.tag_links_created ?? 0}`;
           tagsInput.value = "";
         } catch (err) {
           statusText.textContent = `Error: ${err?.message || err}`;
@@ -328,7 +351,7 @@
 
       resetBatchBtn?.addEventListener("click", async () => {
         try {
-          statusText.textContent = "Resetting…";
+          statusText.textContent = "Resetting...";
           const old = batchId;
           await ensureBatch({ reset: true, batch_id: old });
           lastPaths = [];
@@ -341,7 +364,8 @@
       (async () => {
         try {
           await ensureBatch();
-          statusText.textContent = `Ready • Batch ${batchId}`;
+          await getBinaryPaths();
+          statusText.textContent = `Ready | Batch ${batchId}`;
         } catch (err) {
           statusText.textContent = `Error: ${err?.message || err}`;
         }
