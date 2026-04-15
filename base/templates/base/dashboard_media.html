@@ -1,0 +1,140 @@
+{% extends "base/base.html" %}
+
+{% block title %}Media{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <div class="section-label mb-2">Media explorer</div>
+      <h1 class="h3 mb-1">Media</h1>
+      <div class="muted">Search, sort, and browse media by project, client, tag, and metadata.</div>
+    </div>
+  </div>
+
+  <div class="visa-glass-soft card-visa">
+    <div class="content-card-header px-4 py-3">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-xl-4">
+          <label class="form-label muted small text-uppercase">Search</label>
+          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Lake, .mp4, codec, tag...">
+        </div>
+        <div class="col-12 col-md-4 col-xl-2">
+          <label class="form-label muted small text-uppercase">Project</label>
+          <select name="project_id" class="form-select search-input">
+            <option value="">All</option>
+            {% for project in projects %}
+              <option value="{{ project.id }}" {% if filters.project_id == project.id|stringformat:"s" %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-2">
+          <label class="form-label muted small text-uppercase">Client</label>
+          <select name="client_id" class="form-select search-input">
+            <option value="">All</option>
+            {% for client in clients %}
+              <option value="{{ client.id }}" {% if filters.client_id == client.id|stringformat:"s" %}selected{% endif %}>
+                {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-2">
+          <label class="form-label muted small text-uppercase">Tag</label>
+          <select name="tag_id" class="form-select search-input">
+            <option value="">All</option>
+            {% for tag in tags %}
+              <option value="{{ tag.id }}" {% if filters.tag_id == tag.id|stringformat:"s" %}selected{% endif %}>{{ tag.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-xl-2 d-flex justify-content-end">
+          <button class="btn btn-outline-visa px-4 w-100">Filter Media</button>
+        </div>
+
+        <div class="col-12">
+          <div class="d-flex flex-wrap gap-2">
+            <label class="filter-chip">
+              <input type="checkbox" name="projects" value="1" {% if search_state.projects %}checked{% endif %}>
+              <span>Projects</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="clients" value="1" {% if search_state.clients %}checked{% endif %}>
+              <span>Clients</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="tags" value="1" {% if search_state.tags %}checked{% endif %}>
+              <span>Tags</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="metadata" value="1" {% if search_state.metadata %}checked{% endif %}>
+              <span>Metadata</span>
+            </label>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-visa table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>File</th>
+            <th>Client</th>
+            <th>Tags</th>
+            <th>Metadata</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for media in media_list %}
+            <tr>
+              <td>
+                {% if media.project %}
+                  <span class="fw-semibold text-light">{{ media.project.name }}</span>
+                {% else %}
+                  <span class="muted">Unassigned</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="fw-semibold text-light">{{ media.file_name }}</div>
+                <div class="small muted text-truncate" style="max-width: 320px;" title="{{ media.file_path }}">{{ media.file_path }}</div>
+              </td>
+              <td class="small muted">
+                {% if media.project %}
+                  {% for client in media.project.customers.all %}
+                    <div>{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
+                  {% empty %}
+                    —
+                  {% endfor %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                <div class="d-flex flex-wrap gap-2">
+                  {% for tag in media.tags.all %}
+                    <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
+                  {% empty %}
+                    <span class="muted">—</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td class="small muted">
+                {% if media.metadata %}
+                  {{ media.metadata.file_type|default:"unknown" }}
+                  {% if media.metadata.resolution %}| {{ media.metadata.resolution }}{% endif %}
+                  {% if media.metadata.codec %}| {{ media.metadata.codec }}{% endif %}
+                  {% if media.metadata.duration %}| {{ media.metadata.duration }}{% endif %}
+                {% else %}
+                  No metadata
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center py-5"><div class="muted">No media matched those filters.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

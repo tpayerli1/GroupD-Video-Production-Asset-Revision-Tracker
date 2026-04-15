@@ -35,30 +35,29 @@ class DashboardSearchTests(TestCase):
             color_space="bt709",
         )
 
-    def test_dashboard_search_defaults_to_all_scopes(self):
-        response = self.client.post(reverse("dashboard_home"), {"q": "lake"})
+    def test_media_search_defaults_to_all_scopes(self):
+        response = self.client.get(
+            reverse("dashboard_media"),
+            {"q": "lake", "projects": "1", "clients": "1", "tags": "1", "metadata": "1"},
+        )
 
         self.assertEqual(response.status_code, 200)
-        search_results = response.context["search_results"]
+        media_list = list(response.context["media_list"])
 
-        self.assertEqual(len(search_results["projects"]), 1)
-        self.assertEqual(len(search_results["clients"]), 1)
-        self.assertEqual(len(search_results["metadata"]), 1)
-        self.assertGreaterEqual(search_results["total"], 3)
+        self.assertEqual(len(media_list), 1)
+        self.assertEqual(media_list[0], self.media)
 
-    def test_dashboard_search_can_limit_to_tags_only(self):
-        response = self.client.post(
-            reverse("dashboard_home"),
+    def test_media_search_can_limit_to_tags_only(self):
+        response = self.client.get(
+            reverse("dashboard_media"),
             {"q": "shore", "tags": "1"},
         )
 
         self.assertEqual(response.status_code, 200)
-        search_results = response.context["search_results"]
+        media_list = list(response.context["media_list"])
 
-        self.assertEqual(len(search_results["tags"]), 1)
-        self.assertEqual(len(search_results["projects"]), 0)
-        self.assertEqual(len(search_results["clients"]), 0)
-        self.assertEqual(len(search_results["metadata"]), 0)
+        self.assertEqual(len(media_list), 1)
+        self.assertEqual(media_list[0], self.media)
 
 
 class MediaMetadataProbeApiTests(TestCase):
@@ -294,3 +293,46 @@ class BatchLifecycleTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Batch.objects.filter(id=batch.id).exists())
+
+
+class DashboardNavigationTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Lake Project", location="Chicago")
+        self.client_obj = Customer.objects.create(
+            project=self.project,
+            company_name="Lake House Studio",
+            first_name="Avery",
+            last_name="Stone",
+        )
+        self.batch = Batch.objects.create()
+        self.media = Media.objects.create(
+            batch=self.batch,
+            project=self.project,
+            file_name="lake-broll.mp4",
+            file_path="C:\\media\\lake-broll.mp4",
+        )
+        self.tag = Tag.objects.create(name="lake")
+        self.media.tags.add(self.tag)
+        MediaMetadata.objects.create(media=self.media, file_type="video", codec="prores")
+
+    def test_dashboard_clients_page_lists_clients(self):
+        response = self.client.get(reverse("dashboard_clients"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Lake House Studio")
+
+    def test_dashboard_projects_page_can_create_project(self):
+        response = self.client.post(
+            reverse("dashboard_projects"),
+            {"name": "Fresh Project", "location": "Joplin"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Project.objects.filter(name="Fresh Project", location="Joplin").exists())
+
+    def test_dashboard_media_page_filters_by_search_query(self):
+        response = self.client.get(
+            reverse("dashboard_media"),
+            {"q": "lake", "projects": "1", "clients": "1", "tags": "1", "metadata": "1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "lake-broll.mp4")
+        self.assertContains(response, "Lake Project")

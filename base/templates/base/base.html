@@ -177,6 +177,30 @@
       color: inherit;
     }
 
+    .quick-link-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+
+    @media (min-width: 576px) {
+      .quick-link-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 992px) {
+      .quick-link-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 1400px) {
+      .quick-link-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+
     .quick-link-card .icon-wrap {
       width: 44px;
       height: 44px;
@@ -333,8 +357,7 @@
           </div>
 
           <div class="visa-glass rounded-4 p-3 p-md-4">
-            <form method="post" action="{% url 'dashboard_home' %}" class="search-wrap">
-              {% csrf_token %}
+            <form method="get" action="{% url 'dashboard_media' %}" class="search-wrap">
               <div class="row g-3 align-items-center">
                 <div class="col-12 col-lg">
                   <input
@@ -359,7 +382,7 @@
                     type="checkbox"
                     name="projects"
                     value="1"
-                    {% if search_state.projects %}checked{% endif %}
+                    {% if search_state.projects|default:True %}checked{% endif %}
                   >
                   <span>Projects</span>
                 </label>
@@ -369,7 +392,7 @@
                     type="checkbox"
                     name="tags"
                     value="1"
-                    {% if search_state.tags %}checked{% endif %}
+                    {% if search_state.tags|default:True %}checked{% endif %}
                   >
                   <span>Tags</span>
                 </label>
@@ -379,7 +402,7 @@
                     type="checkbox"
                     name="clients"
                     value="1"
-                    {% if search_state.clients %}checked{% endif %}
+                    {% if search_state.clients|default:True %}checked{% endif %}
                   >
                   <span>Clients</span>
                 </label>
@@ -389,7 +412,7 @@
                     type="checkbox"
                     name="metadata"
                     value="1"
-                    {% if search_state.metadata %}checked{% endif %}
+                    {% if search_state.metadata|default:True %}checked{% endif %}
                   >
                   <span>Metadata</span>
                 </label>
@@ -400,8 +423,8 @@
           <div>
             <div class="section-label mb-3">Current stuff</div>
 
-            <div class="row g-3">
-              <div class="col-6 col-md-3">
+            <div class="quick-link-grid">
+              <div>
                 <a href="{% url 'dashboard_home' %}" class="quick-link-card">
                   <div class="d-flex align-items-start gap-3">
                     <div class="icon-wrap">
@@ -417,8 +440,24 @@
                 </a>
               </div>
 
-              <div class="col-6 col-md-3">
-                <a href="#" class="quick-link-card">
+              <div>
+                <a href="{% url 'dashboard_clients' %}" class="quick-link-card">
+                  <div class="d-flex align-items-start gap-3">
+                    <div class="icon-wrap">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M2 2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5L10.5 2H2zm8.5 1.5L14 7h-3a.5.5 0 0 1-.5-.5v-3z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div class="fw-semibold">Clients</div>
+                      <div class="small muted">People and orgs</div>
+                    </div>
+                  </div>
+                </a>
+              </div>
+
+              <div>
+                <a href="{% url 'dashboard_projects' %}" class="quick-link-card">
                   <div class="d-flex align-items-start gap-3">
                     <div class="icon-wrap">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
@@ -427,14 +466,14 @@
                     </div>
                     <div>
                       <div class="fw-semibold">Projects</div>
-                      <div class="small muted">Coming online</div>
+                      <div class="small muted">Create and organize work</div>
                     </div>
                   </div>
                 </a>
               </div>
 
-              <div class="col-6 col-md-3">
-                <a href="#" class="quick-link-card">
+              <div>
+                <a href="{% url 'dashboard_tags' %}" class="quick-link-card">
                   <div class="d-flex align-items-start gap-3">
                     <div class="icon-wrap">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
@@ -443,23 +482,23 @@
                     </div>
                     <div>
                       <div class="fw-semibold">Tags</div>
-                      <div class="small muted">Media metadata</div>
+                      <div class="small muted">By creator or project</div>
                     </div>
                   </div>
                 </a>
               </div>
 
-              <div class="col-6 col-md-3">
-                <a href="#" class="quick-link-card">
+              <div>
+                <a href="{% url 'dashboard_media' %}" class="quick-link-card">
                   <div class="d-flex align-items-start gap-3">
                     <div class="icon-wrap">
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M13 7a3 3 0 1 0-2.83-4H5.83A3 3 0 1 0 3 7c.24 0 .47-.03.7-.08l1.48 2.21a3.02 3.02 0 0 0 0 1.74L3.7 13.08A3 3 0 1 0 5.83 15h4.34A3 3 0 1 0 13 11c-.24 0-.47.03-.7.08l-1.48-2.21a3.02 3.02 0 0 0 0-1.74l1.48-2.21c.23.05.46.08.7.08z"/>
+                        <path d="M4.502 1a1.5 1.5 0 0 0-1.341.829L1.28 5.63A1.5 1.5 0 0 0 1 6.5v6A1.5 1.5 0 0 0 2.5 14h11a1.5 1.5 0 0 0 1.5-1.5v-6a1.5 1.5 0 0 0-.28-.87l-1.88-3.801A1.5 1.5 0 0 0 11.498 1h-6.996ZM4.5 2h7a.5.5 0 0 1 .447.276L13.382 5H2.618l1.435-2.724A.5.5 0 0 1 4.5 2ZM2 6h12v6.5a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5V6Zm7 1.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 0 0 0-5Z"/>
                       </svg>
                     </div>
                     <div>
-                      <div class="fw-semibold">Clients</div>
-                      <div class="small muted">People and orgs</div>
+                      <div class="fw-semibold">Media</div>
+                      <div class="small muted">Search and sort everything</div>
                     </div>
                   </div>
                 </a>

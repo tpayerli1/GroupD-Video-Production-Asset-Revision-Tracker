@@ -1,0 +1,115 @@
+{% extends "base/base.html" %}
+
+{% block title %}Projects{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <div class="section-label mb-2">Project organization</div>
+      <h1 class="h3 mb-1">Projects</h1>
+      <div class="muted">Create projects and optionally attach a client during setup.</div>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="d-grid gap-2 mb-4">
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-4">
+      <div class="visa-glass-soft card-visa h-100">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Create Project</div>
+          <div class="small muted">Optional client fields will create the first client for this project.</div>
+        </div>
+        <div class="p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Project Name</label>
+              <input name="name" class="form-control search-input">
+            </div>
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Location</label>
+              <input name="location" class="form-control search-input">
+            </div>
+            <div class="rounded-4 border border-secondary-subtle p-3">
+              <div class="fw-semibold mb-2">Optional client</div>
+              <div class="mb-3">
+                <label class="form-label muted small text-uppercase">Company Name</label>
+                <input name="client_company_name" class="form-control search-input">
+              </div>
+              <div class="row g-3">
+                <div class="col-6">
+                  <label class="form-label muted small text-uppercase">First Name</label>
+                  <input name="client_first_name" class="form-control search-input">
+                </div>
+                <div class="col-6">
+                  <label class="form-label muted small text-uppercase">Last Name</label>
+                  <input name="client_last_name" class="form-control search-input">
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-visa-primary w-100 mt-3">Save Project</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-7">
+              <label class="form-label muted small text-uppercase">Search</label>
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Project, location, client...">
+            </div>
+            <div class="col-12 col-md-5">
+              <label class="form-label muted small text-uppercase">Limit To Client</label>
+              <select name="client_id" class="form-select search-input">
+                <option value="">All clients</option>
+                {% for client in clients %}
+                  <option value="{{ client.id }}" {% if filters.client_id == client.id|stringformat:"s" %}selected{% endif %}>
+                    {% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-outline-visa px-4">Filter Projects</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-visa table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Location</th>
+                <th>Clients</th>
+                <th>Media</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for project in projects %}
+                <tr>
+                  <td class="fw-semibold text-light">{{ project.name }}</td>
+                  <td>{{ project.location|default:"—" }}</td>
+                  <td>{{ project.client_total }}</td>
+                  <td>{{ project.media_total }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="4" class="text-center py-5"><div class="muted">No projects yet.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

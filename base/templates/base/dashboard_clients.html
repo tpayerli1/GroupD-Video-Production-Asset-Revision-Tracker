@@ -1,0 +1,122 @@
+{% extends "base/base.html" %}
+
+{% block title %}Clients{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <div class="section-label mb-2">Relationship management</div>
+      <h1 class="h3 mb-1">Clients</h1>
+      <div class="muted">Browse people and orgs tied to projects.</div>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="d-grid gap-2 mb-4">
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-0">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-4">
+      <div class="visa-glass-soft card-visa h-100">
+        <div class="content-card-header px-4 py-3">
+          <div class="fw-semibold">Create Client</div>
+          <div class="small muted">Clients belong to a project.</div>
+        </div>
+        <div class="p-4">
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Project</label>
+              <select name="project_id" class="form-select search-input">
+                <option value="">Select project…</option>
+                {% for project in projects %}
+                  <option value="{{ project.id }}">{{ project.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label muted small text-uppercase">Company Name</label>
+              <input name="company_name" class="form-control search-input">
+            </div>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">First Name</label>
+                <input name="first_name" class="form-control search-input">
+              </div>
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Last Name</label>
+                <input name="last_name" class="form-control search-input">
+              </div>
+            </div>
+            <div class="row g-3 mt-0">
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Email</label>
+                <input name="email" type="email" class="form-control search-input">
+              </div>
+              <div class="col-6">
+                <label class="form-label muted small text-uppercase">Phone</label>
+                <input name="phone" class="form-control search-input">
+              </div>
+            </div>
+            <button class="btn btn-visa-primary w-100 mt-3">Save Client</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-8">
+      <div class="visa-glass-soft card-visa">
+        <div class="content-card-header px-4 py-3">
+          <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-7">
+              <label class="form-label muted small text-uppercase">Search</label>
+              <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Client, company, project...">
+            </div>
+            <div class="col-12 col-md-5">
+              <label class="form-label muted small text-uppercase">Project</label>
+              <select name="project_id" class="form-select search-input">
+                <option value="">All projects</option>
+                {% for project in projects %}
+                  <option value="{{ project.id }}" {% if filters.project_id == project.id|stringformat:"s" %}selected{% endif %}>{{ project.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-outline-visa px-4">Filter Clients</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-visa table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Project</th>
+                <th>Contact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for client in clients %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold text-light">{% if client.company_name %}{{ client.company_name }}{% else %}{{ client.first_name }} {{ client.last_name }}{% endif %}</div>
+                    <div class="small muted">{{ client.first_name }} {{ client.last_name }}</div>
+                  </td>
+                  <td>{{ client.project.name }}</td>
+                  <td class="small muted">{% if client.email %}{{ client.email }}{% endif %}{% if client.email and client.phone %} | {% endif %}{% if client.phone %}{{ client.phone }}{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3" class="text-center py-5"><div class="muted">No clients yet.</div></td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

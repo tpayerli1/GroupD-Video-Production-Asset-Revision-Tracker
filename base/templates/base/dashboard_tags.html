@@ -1,0 +1,67 @@
+{% extends "base/base.html" %}
+
+{% block title %}Tags{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <div class="section-label mb-2">Tag library</div>
+      <h1 class="h3 mb-1">Tags</h1>
+      <div class="muted">See tag usage by creator, project, and attached media count.</div>
+    </div>
+  </div>
+
+  <div class="visa-glass-soft card-visa">
+    <div class="content-card-header px-4 py-3">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-md-5">
+          <label class="form-label muted small text-uppercase">Search</label>
+          <input name="q" value="{{ filters.q }}" class="form-control search-input" placeholder="Tag name or media file...">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label muted small text-uppercase">Creator</label>
+          <select name="creator" class="form-select search-input">
+            <option value="">Anyone</option>
+            <option value="me" {% if filters.creator == "me" %}selected{% endif %}>My tags</option>
+            <option value="loose" {% if filters.creator == "loose" %}selected{% endif %}>Loose tags</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label muted small text-uppercase">Project</label>
+          <select name="project_id" class="form-select search-input">
+            <option value="">All projects</option>
+            {% for project in projects %}
+              <option value="{{ project.id }}" {% if filters.project_id == project.id|stringformat:"s" %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-outline-visa px-4">Filter Tags</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-visa table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Tag</th>
+            <th>Creator</th>
+            <th>Media</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tag in tags %}
+            <tr>
+              <td class="fw-semibold text-light">{{ tag.name }}</td>
+              <td>{% if tag.user %}{{ tag.user.username }}{% else %}<span class="muted">Loose / Electron</span>{% endif %}</td>
+              <td>{{ tag.media_total }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-center py-5"><div class="muted">No tags yet.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

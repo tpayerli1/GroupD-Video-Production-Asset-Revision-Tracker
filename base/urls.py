@@ -4,6 +4,10 @@ from . import views
 urlpatterns = [
     path("", views.dashboard_home, name="dashboard_home"),
     path("dashboard/", views.dashboard_home, name="dashboard_home"),
+    path("dashboard/clients/", views.dashboard_clients, name="dashboard_clients"),
+    path("dashboard/projects/", views.dashboard_projects, name="dashboard_projects"),
+    path("dashboard/tags/", views.dashboard_tags, name="dashboard_tags"),
+    path("dashboard/media/", views.dashboard_media, name="dashboard_media"),
     path("dashboard/batch/<int:batch_id>/", views.dashboard_batch_detail, name="dashboard_batch_detail"),
     path("dashboard/batch/<int:batch_id>/assign-project/", views.dashboard_batch_assign_project, name="dashboard_batch_assign_project"),
 ]
