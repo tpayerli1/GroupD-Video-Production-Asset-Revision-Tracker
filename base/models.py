@@ -5,8 +5,8 @@ from django.db import models
 class Project(models.Model):
     name = models.CharField(max_length=90)
     location = models.CharField(max_length=90, blank=True)
-    start_date = models.DateField(null=True, blank=True)
-    end_date = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True, auto_now_add=True)
+    
 
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
