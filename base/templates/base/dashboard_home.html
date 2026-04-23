@@ -86,9 +86,9 @@
                   <div class="fw-semibold mb-3">Tags</div>
                   <div class="d-flex flex-wrap gap-2">
                     {% for tag in search_results.tags %}
-                      <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">
+                      <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2 text-decoration-none">
                         {{ tag.name }} | {{ tag.media_total }}
-                      </span>
+                      </a>
                     {% endfor %}
                   </div>
                 </div>

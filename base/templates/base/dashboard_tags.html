@@ -81,7 +81,7 @@
               {% for tag in tags %}
                 <tr>
                   <td>
-                    <div class="fw-semibold text-light">{{ tag.name }}</div>
+                    <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="fw-semibold text-light text-decoration-none">{{ tag.name }}</a>
                     <div class="small muted">Used across {{ tag.project_total }} project{{ tag.project_total|pluralize }} and {{ tag.client_total }} client{{ tag.client_total|pluralize }}</div>
                   </td>
                   <td>
@@ -98,13 +98,13 @@
                     {% endif %}
                   </td>
                   <td>
-                    <a href="{% url 'dashboard_media' %}?tag_id={{ tag.id }}" class="text-decoration-none text-reset">
+                    <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="text-decoration-none text-reset">
                       <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.media_total }} media</span>
                     </a>
                   </td>
                   <td>
                     <div class="d-flex flex-wrap gap-2 mb-2">
-                      <a href="{% url 'dashboard_media' %}?tag_id={{ tag.id }}" class="btn btn-sm btn-outline-visa">Open Media</a>
+                      <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="btn btn-sm btn-outline-visa">Search Tag</a>
                     </div>
                     <div class="small muted">
                       {% for project in tag.related_projects %}

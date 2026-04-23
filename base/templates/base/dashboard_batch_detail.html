@@ -240,9 +240,9 @@
                     {% if m.tags.all %}
                       <div class="d-flex flex-wrap gap-2">
                         {% for tag in m.tags.all %}
-                          <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">
+                          <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="badge rounded-pill text-bg-dark border border-secondary-subtle text-decoration-none">
                             {{ tag.name }}
-                          </span>
+                          </a>
                         {% endfor %}
                       </div>
                     {% else %}

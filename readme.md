@@ -93,6 +93,33 @@ Do not blindly trust generated code. Always review for:
 5. Run the tests locally.
 6. Commit only reviewed code.
 
+## Presentation Demo Seeding
+
+To generate presentation-safe demo data on a fresh migrated database, run:
+
+```bash
+python manage.py seed_presentation_data
+```
+
+Useful variants:
+
+```bash
+python manage.py seed_presentation_data --dry-run
+python manage.py seed_presentation_data --projects 10 --media 80 --tags 30 --users 8 --active-batches 3
+python manage.py seed_presentation_data --json --seed 42
+```
+
+The command creates:
+
+- demo users
+- projects and project editor links
+- clients tied to projects
+- batches with some unassigned media for the dashboard queue
+- media rows with synthetic Windows-style file paths
+- media metadata plus tag links
+
+By default it samples the current database first so tag vocabulary, codecs, and file extensions feel closer to what you already have, without copying exact file paths into the new rows.
+
 ### Example README-safe note
 
 AI is allowed as a helper for boilerplate, fixtures, and test scaffolding, but students are still responsible for understanding and validating all generated code before submitting it.

@@ -85,7 +85,7 @@
                   <td>
                     <div class="d-flex flex-wrap gap-2">
                       {% for tag in media.tags.all %}
-                        <span class="badge rounded-pill text-bg-dark border border-secondary-subtle">{{ tag.name }}</span>
+                        <a href="{% url 'tags' %}?q={{ tag.name|urlencode }}" class="badge rounded-pill text-bg-dark border border-secondary-subtle text-decoration-none">{{ tag.name }}</a>
                       {% empty %}
                         <span class="muted">-</span>
                       {% endfor %}

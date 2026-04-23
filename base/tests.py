@@ -1,8 +1,10 @@
 import tempfile
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
@@ -513,11 +515,11 @@ class DashboardNavigationTests(TestCase):
         self.assertTrue(Tag.objects.filter(user=self.user, name="promo").exists())
         self.assertTrue(Tag.objects.filter(user=self.user, name="social").exists())
 
-    def test_tags_page_links_to_filtered_media(self):
+    def test_tags_page_links_to_tag_search(self):
         response = self.client.get(reverse("dashboard_tags"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f'{reverse("dashboard_media")}?tag_id={self.tag.id}')
+        self.assertContains(response, f'{reverse("tags")}?q={self.tag.name}')
         self.assertContains(response, reverse("dashboard_project_detail", args=[self.project.id]))
         self.assertContains(response, reverse("dashboard_client_detail", args=[self.client_obj.id]))
 
@@ -549,3 +551,83 @@ class DashboardNavigationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Tag.objects.filter(id=loose_tag.id).exists())
         self.assertTrue(MediaTag.objects.filter(media=self.other_media, tag=existing_tag).exists())
+
+
+class SeedPresentationDataCommandTests(TestCase):
+    def test_dry_run_reports_counts_without_saving(self):
+        stdout = StringIO()
+
+        call_command(
+            "seed_presentation_data",
+            "--seed=7",
+            "--users=3",
+            "--projects=2",
+            "--media=8",
+            "--tags=5",
+            "--active-batches=1",
+            "--dry-run",
+            stdout=stdout,
+        )
+
+        self.assertEqual(Project.objects.count(), 0)
+        self.assertEqual(Media.objects.count(), 0)
+        self.assertIn("Dry run only. No records were saved.", stdout.getvalue())
+
+    def test_command_creates_presentation_dataset(self):
+        stdout = StringIO()
+
+        call_command(
+            "seed_presentation_data",
+            "--seed=11",
+            "--users=4",
+            "--projects=3",
+            "--media=12",
+            "--tags=6",
+            "--active-batches=2",
+            "--metadata-coverage=1",
+            stdout=stdout,
+        )
+
+        self.assertEqual(Project.objects.count(), 3)
+        self.assertEqual(Media.objects.count(), 12)
+        self.assertEqual(MediaMetadata.objects.count(), 12)
+        self.assertEqual(Tag.objects.count(), 6)
+        self.assertGreaterEqual(Customer.objects.count(), 3)
+        self.assertGreaterEqual(ProjectUser.objects.count(), 3)
+        self.assertEqual(Media.objects.filter(project__isnull=True).count(), 8)
+        self.assertEqual(Batch.objects.filter(closed_at__isnull=True).count(), 2)
+        self.assertEqual(Batch.objects.filter(closed_at__isnull=False).count(), 1)
+        self.assertFalse(Media.objects.filter(file_path="").exists())
+        self.assertEqual(Media.objects.values("file_path").distinct().count(), 12)
+        self.assertTrue(MediaTag.objects.exists())
+        self.assertIn("Created 3 projects, 12 media rows, 12 metadata rows", stdout.getvalue())
+
+    def test_command_can_bias_generation_from_existing_records(self):
+        existing_project = Project.objects.create(name="Warehouse Archive Legacy", location="Tulsa")
+        Customer.objects.create(
+            project=existing_project,
+            company_name="Blue Orbit Media",
+            first_name="Avery",
+            last_name="Stone",
+        )
+        Tag.objects.create(name="warehouse")
+        Media.objects.create(
+            project=existing_project,
+            file_name="warehouse_clip.mov",
+            file_path=r"D:\Existing\warehouse_clip.mov",
+        )
+
+        stdout = StringIO()
+        call_command(
+            "seed_presentation_data",
+            "--seed=5",
+            "--users=2",
+            "--projects=1",
+            "--media=3",
+            "--tags=3",
+            "--active-batches=1",
+            "--reuse-existing-patterns",
+            stdout=stdout,
+        )
+
+        self.assertIn("Sampled existing records before generation: 1 projects, 1 media files, 1 tags.", stdout.getvalue())
