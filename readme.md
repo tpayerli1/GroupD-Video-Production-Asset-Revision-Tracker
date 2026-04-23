@@ -95,7 +95,19 @@ Do not blindly trust generated code. Always review for:
 
 ## Presentation Demo Seeding
 
-To generate presentation-safe demo data on a fresh migrated database, run:
+Use the seed command after migrations if you want a fuller demo database for the presentation.
+
+```bash
+python manage.py migrate
+```
+
+Preview the generated counts first without saving anything:
+
+```bash
+python manage.py seed_presentation_data --dry-run
+```
+
+Generate the demo dataset for real:
 
 ```bash
 python manage.py seed_presentation_data
@@ -104,10 +116,16 @@ python manage.py seed_presentation_data
 Useful variants:
 
 ```bash
-python manage.py seed_presentation_data --dry-run
 python manage.py seed_presentation_data --projects 10 --media 80 --tags 30 --users 8 --active-batches 3
 python manage.py seed_presentation_data --json --seed 42
 ```
+
+Recommended flow:
+
+1. Run `python manage.py migrate` on the target database.
+2. Run `python manage.py seed_presentation_data --dry-run` and review the projected counts.
+3. Run `python manage.py seed_presentation_data` when the numbers look right.
+4. Use the custom count flags if you want a bigger or smaller presentation dataset.
 
 The command creates:
 
