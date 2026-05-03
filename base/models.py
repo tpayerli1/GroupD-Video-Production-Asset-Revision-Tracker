@@ -98,7 +98,7 @@ class Media(models.Model):
         Project,
         on_delete=models.CASCADE,
         related_name="media",
-        null=True,
+         null=True,
         blank=True,
     )
 

@@ -993,6 +993,9 @@ def dashboard_batch_assign_project(request, batch_id):
     messages.success(request, ". ".join(message_parts) + ".")
 
     if project and not _batch_has_unassigned_media(batch.id):
+        if not batch.closed_at:
+            batch.closed_at = timezone.now()
+            batch.save(update_fields=["closed_at"])
         messages.info(request, f'Batch #{batch.id} is fully assigned and has been removed from the active queue.')
         return redirect("dashboard_home")
 
